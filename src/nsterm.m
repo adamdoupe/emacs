@@ -843,6 +843,13 @@ ns_focus (struct frame *f, NSRect *r, int n)
 /*debug_lock--; */
             }
 
+          if (view) {
+              EmacsFullWindow *win = [view window];
+              if ([win isKindOfClass:[EmacsFullWindow class]]) {
+                  [[win getNormalWindow] orderOut:nil];
+              }
+          }
+
           if (view)
             [view lockFocus];
           focus_view = view;
@@ -1291,11 +1298,17 @@ x_set_window_size (struct frame *f, int change_grav, int cols, int rows)
   f->scroll_bar_actual_width = NS_SCROLL_BAR_WIDTH (f);
   compute_fringe_widths (f, 0);
 
-  pixelwidth =  FRAME_TEXT_COLS_TO_PIXEL_WIDTH   (f, cols);
-  pixelheight = FRAME_TEXT_LINES_TO_PIXEL_HEIGHT (f, rows);
+  if ([window isKindOfClass:[EmacsFullWindow class]]) {
+      pixelwidth = [[window screen] frame].size.width;
+      pixelheight = [[window screen] frame].size.height;
+  }
+  else {
+      pixelwidth =  FRAME_TEXT_COLS_TO_PIXEL_WIDTH   (f, cols);
+      pixelheight = FRAME_TEXT_LINES_TO_PIXEL_HEIGHT (f, rows);
+  }
 
   /* If we have a toolbar, take its height into account. */
-  if (tb && ! [view isFullscreen])
+if (tb && ! ([view isFullscreen] || [window isKindOfClass:[EmacsFullWindow class]]))
     {
     /* NOTE: previously this would generate wrong result if toolbar not
              yet displayed and fixing toolbar_height=32 helped, but
@@ -5580,7 +5593,7 @@ not_in_argv (NSString *arg)
   if (cols < MINWIDTH)
     cols = MINWIDTH;
 
-  if (! [self isFullscreen])
+  if (! ([self isFullscreen] || [[self window] isKindOfClass:[EmacsFullWindow class]]))
     {
       extra = FRAME_NS_TITLEBAR_HEIGHT (emacsframe)
         + FRAME_TOOLBAR_HEIGHT (emacsframe) - gsextra;
@@ -6148,7 +6161,7 @@ if (cols > 0 && rows > 0)
 #ifdef HAVE_NATIVE_FS
 - (void)updateCollectionBehaviour
 {
-  if (! [self isFullscreen])
+  if (! [self isFullscreen] || [[self window] isKindOfClass:[EmacsFullWindow class]])
     {
       NSWindow *win = [self window];
       NSWindowCollectionBehavior b = [win collectionBehavior];
@@ -6694,6 +6707,62 @@ if (cols > 0 && rows > 0)
 
 @implementation EmacsWindow
 
+-(NSWindow *)toggleFullscreen {
+    BOOL isFullscreen = [[self className] isEqualToString:@"EmacsFullWindow"];
+    NSWindow *win;
+
+    if (isFullscreen) {
+        EmacsFullWindow *f = (EmacsFullWindow *)self;
+        EmacsWindow *w = [f getNormalWindow];
+
+        [w setContentView:[f contentView]];
+        [w makeKeyAndOrderFront:nil];
+
+        [f close];
+
+        win = w;
+
+        if ([[self screen] isEqual:[[NSScreen screens] objectAtIndex:0]]) {
+            if ([NSApp respondsToSelector:@selector(setPresentationOptions:)]) {
+                [NSApp setPresentationOptions:NSApplicationPresentationDefault];
+            }
+            else {
+                [NSMenu setMenuBarVisible:YES];
+            }
+        }
+    }
+    else {
+        [self deminiaturize:nil];
+
+        if ([[self screen] isEqual:[[NSScreen screens] objectAtIndex:0]]) {
+            if ([NSApp respondsToSelector:@selector(setPresentationOptions:)]) {
+                [NSApp setPresentationOptions:NSApplicationPresentationAutoHideDock | NSApplicationPresentationAutoHideMenuBar];
+            }
+            else {
+                [NSMenu setMenuBarVisible:NO];
+            }
+        }
+
+        [self orderOut:nil];
+
+        EmacsFullWindow *f = [[EmacsFullWindow alloc] initWithNormalWindow:self];
+        EmacsView *view = (EmacsView *)[self delegate];
+        [f setDelegate:view];
+        [f makeFirstResponder:view];
+        [f setContentView:[self contentView]];
+        [f setContentSize:[[self screen] frame].size];
+        [f setTitle:[self title]];
+        [f makeKeyAndOrderFront:nil];
+	[f useOptimizedDrawing: YES];
+
+        win = f;
+    }
+
+    return win;
+}
+
+
+
 #ifdef NS_IMPL_COCOA
 - (id)accessibilityAttributeValue:(NSString *)attribute
 {
@@ -6776,6 +6845,34 @@ if (cols > 0 && rows > 0)
 }
 
 @end /* EmacsWindow */
+
+@implementation EmacsFullWindow
+
+-(BOOL)canBecomeKeyWindow {
+    return YES;
+}
+
+-(id)initWithNormalWindow:(EmacsWindow *)window {
+    self = [super initWithContentRect:[window contentRectForFrameRect:[[window screen] frame]]
+                            styleMask:NSBorderlessWindowMask
+                              backing:NSBackingStoreBuffered
+                                defer:YES];
+    if (self) {
+        normalWindow = window;
+        [self setAcceptsMouseMovedEvents: YES];
+        [self useOptimizedDrawing: YES];
+    }
+
+    return self;
+}
+
+-(EmacsWindow *)getNormalWindow {
+    return normalWindow;
+}
+
+@end /* EmacsFullWindow */
+
+
 
 
 @implementation EmacsFSWindow

@@ -165,7 +165,25 @@ typedef float EmacsCGFloat;
 {
   NSPoint grabOffset;
 }
+
+-(EmacsWindow *)toggleFullscreen;
+
 @end
+
+/* 10.5 or below is not supported [NSWindow setStyleMask:], so require content swap hack */
+@interface EmacsFullWindow : EmacsWindow {
+    EmacsWindow *normalWindow;
+}
+
+-(id)initWithNormalWindow:(EmacsWindow *)window;
+-(EmacsWindow *)getNormalWindow;
+
+@end
+
+// dummy for 10.5-
+#define NSApplicationPresentationDefault 0
+#define NSApplicationPresentationAutoHideDock (1 <<  0)
+#define NSApplicationPresentationAutoHideMenuBar (1 <<  2)
 
 
 /* Fullscreen version of the above.  */
