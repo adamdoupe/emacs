@@ -1,3 +1,28 @@
+2013-08-13  Xue Fuqiao  <xfq.free@gmail.com>
+
+	* simple.el (backward-word): Mention the optional argument.
+
+2013-08-13  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* frameset.el (frameset--make): Rename constructor from make-frameset.
+	(frameset-p, frameset-valid-p): Don't autoload.
+	(frameset-valid-p): Use normal accessors.
+
+2013-08-13  Glenn Morris  <rgm@gnu.org>
+
+	* progmodes/compile.el (compile-command): Tweak example in doc.
+	* obsolete/scribe.el (scribe-mode):
+	* progmodes/mixal-mode.el (mixal-mode): Quote buffer name.  (Bug#15053)
+
+	* mail/feedmail.el (feedmail-confirm-outgoing)
+	(feedmail-display-full-frame, feedmail-deduce-bcc-where): Fix types.
+
+	* cus-start.el (truncate-partial-width-windows): Fix type.
+
+	* emulation/viper-init.el (viper-search-scroll-threshold): Fix type.
+
+	* net/shr.el (shr-table-horizontal-line): Fix custom type.
+
 2013-08-13  Stefan Monnier  <monnier@iro.umontreal.ca>
 
 	* emacs-lisp/timer.el (timer--time-setter): New function.

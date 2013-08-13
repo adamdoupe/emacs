@@ -26,6 +26,8 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "character.h"
 #include "buffer.h"
 
+#include <verify.h>
+
 static Lisp_Object Qzlib_dll;
 
 #ifdef WINDOWSNT
@@ -144,6 +146,8 @@ This function can be called only in unibyte buffers.  */)
 #ifdef WINDOWSNT
   if (!zlib_initialized)
     zlib_initialized = init_zlib_functions ();
+  if (!zlib_initialized)
+    return Qnil;
 #endif
 
   /* This is a unibyte buffer, so character positions and bytes are
@@ -178,10 +182,11 @@ This function can be called only in unibyte buffers.  */)
   do
     {
       /* Maximum number of bytes that one 'inflate' call should read and write.
-	 zlib requires that these values not exceed UINT_MAX.
-	 Do not make avail_out too large, as that might unduly delay C-g.  */
+	 Do not make avail_out too large, as that might unduly delay C-g.
+	 In any case zlib requires that these values not exceed UINT_MAX.  */
       ptrdiff_t avail_in = min (iend - pos_byte, UINT_MAX);
-      ptrdiff_t avail_out = min (1 << 14, UINT_MAX);
+      enum { avail_out = 1 << 14 };
+      verify (avail_out <= UINT_MAX);
 
       ptrdiff_t decompressed;
 

@@ -1,3 +1,96 @@
+2013-08-13  Eli Zaretskii  <eliz@gnu.org>
+
+	* decompress.c (Fzlib_decompress_region) [WINDOWSNT]: Return Qnil
+	if loading zlib failed.
+
+2013-08-13  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsterm.m (ns_set_vertical_scroll_bar): Fix breakage intruduced by
+	2013-08-13 checkin below.  Change bool to BOOL, rule is:
+	All Obj-C code uses BOOL, except for interfaces callable from C.
+
+	* nsterm.h: Fix CGFloat for OSX 10.4 (Bug#15086).
+
+2013-08-13  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* window.h (WINDOW_FRINGE_EXTENDED_P): New macro.
+	* nsterm.m (ns_set_vertical_scroll_bar): Use it.  Use convenient
+	bool instead of BOOL.
+	* w32term.h (struct scroll_bar): Convert fringe_extended_p
+	from Lisp_Object to bitfield.  Adjust comment.
+	* w32term.c (x_scroll_bar_create): Adjust user.
+	Use WINDOW_FRINGE_EXTENDED_P and bool for boolean.
+	* xterm.c (XTset_vertical_scroll_bar): Likewise.
+	Use bool for boolean.
+	* xterm.h (struct scroll_bar): Prefer commonly used `unsigned'
+	to `unsigned int' when defining a bitfield.
+
+2013-08-13  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* decompress.c (Fzlib_decompress_region): Try to clarify 'avail_out'.
+
+2013-08-13  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* window.h (struct window): Convert left_margin_cols and
+	right_margin_cols from Lisp_Objects to integers.  Adjust comment.
+	(WINDOW_LEFT_MARGIN_COLS, WINDOW_RIGHT_MARGIN_COLS)
+	(WINDOW_LEFT_MARGIN_WIDTH, WINDOW_RIGHT_MARGIN_WIDTH):
+	Adjust users.
+	* dispnew.c (margin_glyphs_to_reserve): Convert 3rd arg to int.
+	Adjust comment.
+	(showing_window_margins_p, update_window_line, update_frame_1):
+	* fringe.c (draw_fringe_bitmap_1):
+	* xdisp.c (window_box_width): Adjust users.
+	* window.c (wset_left_margin_cols, wset_right_margin_cols): Remove.
+	(adjust_window_margins, set_window_buffer, Fsplit_window_internal):
+	Use direct assignment.
+	(Fset_window_configuration, save_window_save, Fwindow_margins):
+	Convert Lisp_Object to integer and back where appropriate.
+	(Fset_window_margins): Adjust user.  Return t if any margin
+	was actually changed, and mention this in docstring.
+
+2013-08-13  Xue Fuqiao  <xfq.free@gmail.com>
+
+	* syntax.c (forward_word):
+	* cmds.c (forward_char, backward_char): Mention the optional argument.
+
+2013-08-13  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* window.h (struct window): Convert left_fringe_width
+	and right_fringe_width from Lisp_Objects to integers.
+	Adjust comment.
+	(WINDOW_FRINGE_COLS, WINDOW_LEFT_FRINGE_WIDTH)
+	(WINDOW_RIGHT_FRINGE_WIDTH): Adjust users.
+	* window.c (wset_left_fringe_width, wset_right_fringe_width):
+	Remove.
+	(make_window): Initialize new integer fields to -1.
+	(Fsplit_window_internal): Use direct assignment.
+	(Fset_window_configuration, save_window_save): Convert
+	Lisp_Object to integer and back where appropriate.
+	(Fset_window_fringes): Adjust user.  Return t if any fringe
+	was actually changed, and mention this in docstring.
+
+2013-08-13  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* keyboard.c (Fdiscard_input): Do not increment update_mode_lines.
+	* nsfns.m (x_set_cursor_type):
+	* w32fns.c (x_set_cursor_type):
+	* xfns.m (x_set_cursor_type): Do not set cursor_type_changed here...
+	* xdisp.c (set_frame_cursor_types): ...but in common code.
+
+2013-08-13  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* font.c (clear_font_cache): New function, stripped from...
+	(Fclear_font_cache): ...here, which now uses the function
+	above.  Adjust comment.
+	* font.h (clear_font_cache): Add prototype.
+	* xfaces.c (clear_face_cache): Use clear_font_cache.
+
+2013-08-13  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* window.c (Fset_window_start): Compare `w', not `window' because
+	`w' might not be equal to `window' after call to decode_live_window.
+
 2013-08-12  Paul Eggert  <eggert@cs.ucla.edu>
 
 	* process.c (deactivate_process): Reset fds to -1 (Bug#15035).
