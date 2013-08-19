@@ -1,3 +1,270 @@
+2013-08-19  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* image.c (imagemagick_get_animation_cache): Don't segfault on
+	each invocation.
+
+2013-08-19  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* image.c: Fix animation cache signature memory leak.
+	Fix some other minor performance problems while we're at it.
+	(imagemagick_create_cache): Clear just the members that
+	need clearing.  Don't set update_time, as caller does that now.
+	(imagemagick_prune_animation_cache, imagemagick_get_animation_cache):
+	Simplify by using pointer-to-pointer instead of a prev pointer.
+	(imagemagick_prune_animation_cache): Use make_emacs_time rather
+	than EMACS_TIME_FROM_DOUBLE, and DestroyString rather than free.
+	(imagemagick_get_animation_cache): Don't xstrdup the image signature;
+	it's already a copy.  Free the signature probe unless it's cached.
+
+	* process.c (handle_child_signal): Fix crash; deleted pid (Bug#15106).
+	This was introduced by my 2013-08-12 fix for Bug#15035.
+
+2013-08-19  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* image.c (imagemagick_create_cache, imagemagick_get_animation_cache)
+	(imagemagick_prune_animation_cache): Now static.
+
+2013-08-18  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* image.c (imagemagick_get_animation_cache): Don't segfault when
+	pruning all entries.
+
+2013-08-18  Ken Brown  <kbrown@cornell.edu>
+
+	* sheap.c (STATIC_HEAP_SIZE): Adjust to current needs; use bigger
+	static heap if ENABLE_CHECKING is defined.
+	(max_bss_sbrk_ptr): New variable.
+	(bss_sbrk): Use it.
+	(report_sheap_usage): Report maximum static heap usage instead of
+	ending static heap usage.
+
+2013-08-17  Eli Zaretskii  <eliz@gnu.org>
+
+	* decompress.c (Fzlib_available_p) [WINDOWSNT]: Update the value
+	of zlib_initialized according to the results of calling
+	init_zlib_functions.
+
+2013-08-16  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* image.c: Implement an ImageMagick per-image cache.
+	(imagemagick_get_animation_cache): Fix a double-free error.
+	(imagemagick_load_image): Remove the ping_wand code, which only
+	apparently saved time on invalid animated images, and slowed down
+	everything else.  Optimise for the common case.
+
+2013-08-16  Xue Fuqiao  <xfq.free@gmail.com>
+
+	* buffer.c (syms_of_buffer) <buffer-undo-list>: Doc fix.
+
+	* editfns.c (insert_before_markers): Mention overlay in the doc string.
+
+	* marker.c (set_marker): Remove documentation of undefined behavior.
+
+2013-08-15  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* image.c (imagemagick_compute_animated_image): Animate correctly
+	when sub-images are smaller than the main image.
+	(imagemagick_compute_animated_image): Setting the iterator row to
+	zero is apparently not allowed.
+	(imagemagick_compute_animated_image): Allow images that say they
+	have sub-images that are bigger than the main image, but just crop
+	them.
+
+2013-08-15  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsmenu.m (menuWillOpen:): Fix preprocessor test (Bug#15001).
+
+2013-08-15  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* image.c (imagemagick_compute_animated_image): Respect the GIF
+	disposal methods.
+
+2013-08-15  Ken Brown  <kbrown@cornell.edu>
+
+	* emacs.c (main): Update comment about G_SLICE_ALWAYS_MALLOC.
+	* gmalloc.c (memalign) [CYGWIN]: Revert last change; it's not
+	needed.
+
+2013-08-15  Paul Eggert  <eggert@cs.ucla.edu>
+
+	Fix minor problems found by static checking.
+	* frame.c (delete_frame):
+	* xdisp.c (next_element_from_display_vector):
+	Avoid uninitialized local.
+	* image.c (imagemagick_compute_animated_image): Port to C89.
+	Prefer usual GNU indentation style for loops.
+	Be more careful about bizarrely large sizes, by using ptrdiff_t
+	instead of int.
+
+2013-08-15  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	Fix infinite frame selection loop (Bug#15025).
+	* frame.c (delete_frame): Prefer fast ad-hoc loop to next_frame.
+
+2013-08-15  Eli Zaretskii  <eliz@gnu.org>
+
+	* xdisp.c (compute_window_start_on_continuation_line): When
+	WORD_WRAP is in effect, use move_it_to instead of move_it_by_lines
+	to make sure we end up setting the window start at the leftmost
+	visible character of the display line.  This avoids funky
+	horizontal shifting because the window start is not kept on the
+	same position.  (Bug#15090)
+	(next_element_from_display_vector): Support 'box' face attribute
+	in the face definitions of a display vector.  (Bug#15099)
+
+2013-08-15  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* image.c (imagemagick_compute_animated_image): Implement animated
+	images (bug#14700).
+	(imagemagick_compute_animated_image): Fix some compilation
+	warnings.  Implement a very simple cache to make the animation
+	usable at all, but it should be replaced with a per-image cache.
+
+2013-08-15  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* lisp.h (FOR_EACH_ALIST_VALUE): New macro
+	to do `for' loops over alist values.
+	* buffer.h (FOR_EACH_BUFFER):
+	* process.c (FOR_EACH_PROCESS): Use it.
+	(handle_child_signal, status_notify, Fget_buffer_process)
+	(kill_buffer_processes): Use FOR_EACH_PROCESS.
+
+2013-08-15  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* term.c (get_named_tty, create_tty_output, tty_free_frame_resources)
+	(tty_free_frame_resources, delete_tty): Prefer eassert to emacs_abort.
+	* image.c (make_image_cache): For struct image_cache, prefer xmalloc
+	to xzalloc and so avoid redundant call to memset.
+	* xterm.c (x_term_init): Avoid unnecessary initializations of dpyinfo
+	members because it is allocated with xzalloc and so already zeroed.
+
+2013-08-14  Ken Brown  <kbrown@cornell.edu>
+
+	* gmalloc.c (memalign) [CYGWIN]: Rename to emacs_memalign
+	(Bug#15094).
+
+2013-08-14  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	Utility function and macro to copy Lisp string to C string.
+	* lisp.h (xlispstrdupa): New macro.
+	(xlispstrdup): New prototype.
+	* alloc.c (xlispstrdup): New function.
+	* callint.c (Fcall_interactively):
+	* fileio.c (Ffile_name_directory, Fexpand_file_name)
+	(Fsubstitute_in_file_name):
+	* frame.c (Fmake_terminal_frame): Use xlispstrdupa.
+	* image.c (x_create_bitmap_from_file):
+	* w32term.c (w32_term_init):
+	* xterm.c (x_term_init): Use xlispstrdup.
+
+2013-08-14  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* image.c (imagemagick_load_image): Make animated pictures work.
+	There's still some problems with background color settings, though
+	(bug#14700).
+
+	* decompress.c (unwind_decompress): Always restore point.
+
+2013-08-14  Xue Fuqiao  <xfq.free@gmail.com>
+
+	* marker.c (set_marker): Reformat documentation.
+
+2013-08-14  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* xdisp.c (cursor_type_changed): Now static.
+
+	* image.c (imagemagick_filename_hint): New arg HINT_BUFFER.
+	Use changed.  This avoids the need to call xmalloc and for the
+	caller to call xfree, and avoids memory leaks in some situations.
+
+2013-08-14  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* xdisp.c (adjust_window_ends): Move duplicated code to new function.
+	(try_window, try_window_reusing_current_matrix, try_window_id): Use it.
+	(redisplay_window): If window_end_valid is cleared due to non-zero
+	windows_or_buffers_changed, clear current_matrix_up_to_date_p and
+	so do not call to try_cursor_movement for that window.
+
+2013-08-14  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* window.h (struct window): Convert window_end_pos and
+	window_end_vpos from Lisp_Object to ptrdiff_t and int, respectively.
+	(wset_window_end_pos, wset_window_end_vpos): Remove.
+	* dispnew.c (adjust_glyph_matrix):
+	* window.c (Fwindow_end, replace_window, set_window_buffer)
+	(make_window):
+	* xdisp.c (check_window_end, move_it_to, redisplay_internal)
+	(set_vertical_scroll_bar, redisplay_window, try_window)
+	(try_window_reusing_current_matrix, find_first_unchanged_at_end_row)
+	(try_window_id, decode_mode_spec, mouse_face_from_buffer_pos)
+	(note_mouse_highlight): Adjust users.
+	(try_cursor_movement): Likewise.  Convert old precondition to eassert.
+	Add comment.
+
+2013-08-14  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	Fix --enable-gcc-warnings errors introduced in 2013-08-13 commit.
+	* image.c (imagemagick_filename_hint): Use `const char *' and
+	prefer SSDATA to SDATA to avoid warnings.
+
+2013-08-14  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	Cleanup window fringes, margins and scroll bars adjustments.
+	* window.c (set_window_fringes, set_window_margins)
+	(set_window_scroll_bars, apply_window_adjustment): New functions.
+	(set_window_buffer, Fset_window_margins, Fset_window_fringes)
+	(Fset_window_scroll_bars): Use them.
+
+2013-08-14  Dmitry Antipov  <dmantipov@yandex.ru>
+
+	* window.h (struct window): Convert scroll_bar_width
+	from Lisp_Object to integer.  Adjust comment.
+	(WINDOW_CONFIG_SCROLL_BAR_WIDTH, WINDOW_CONFIG_SCROLL_BAR_COLS):
+	Adjust users.
+	* window.c (wset_scroll_bar_width): Remove.
+	(make_window): Initialize scroll_bar_width.
+	(Fsplit_window_internal): Use direct assignment.
+	(Fset_window_configuration, save_window_save):
+	Convert Lisp_Object to integer and back where appropriate.
+	(Fset_window_scroll_bars): Adjust user.  Return t if any scroll
+	bar was actually changed, and mention this in docstring.
+
+2013-08-13  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* decompress.c: Minor simplifications.
+	(Fzlib_decompress_region): Don't bother verifying
+	that avail_out <= UINT_MAX, as that was confusing.
+	Mention the restriction in a comment instead.
+	Prefer 'int' to 'ptrdiff_t' when 'int' is wide enough.
+
+2013-08-13  Jan Djärv  <jan.h.d@swipnet.se>
+
+	* nsmenu.m (x_activate_menubar): Check for OSX >= 10.5
+	(trackingNotification:): Call ns_check_menu_open only for OSX >= 10.5.
+
+2013-08-13  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* image.c (imagemagick_filename_hint): Check for errors in the
+	alist structure.
+
+2013-08-13  Eli Zaretskii  <eliz@gnu.org>
+
+	* window.c (Fwindow_margins): Return nil when there's no marginal
+	area, as per the documented API.
+
+	* w32term.c (x_scroll_bar_create): Use ALLOCATE_PSEUDOVECTOR, not
+	Fmake_vector, as scroll bar's struct members are not all Lisp
+	objects now.  This avoids crashes in GC.
+
+	* w32term.h (struct scroll_bar): Convert fringe_extended_p to a
+	bool, so its address could be taken.
+
+2013-08-13  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* image.c (imagemagick_filename_hint): New function to possibly
+	apply `image-content-type-suffixes'.
+	(imagemagick_load_image): Use it.
+
 2013-08-13  Eli Zaretskii  <eliz@gnu.org>
 
 	* decompress.c (Fzlib_decompress_region) [WINDOWSNT]: Return Qnil

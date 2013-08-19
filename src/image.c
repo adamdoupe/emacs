@@ -302,11 +302,10 @@ x_create_bitmap_from_file (struct frame *f, Lisp_Object file)
   id = x_allocate_bitmap_record (f);
   dpyinfo->bitmaps[id - 1].img = bitmap;
   dpyinfo->bitmaps[id - 1].refcount = 1;
-  dpyinfo->bitmaps[id - 1].file = xmalloc (SBYTES (file) + 1);
+  dpyinfo->bitmaps[id - 1].file = xlispstrdup (file);
   dpyinfo->bitmaps[id - 1].depth = 1;
   dpyinfo->bitmaps[id - 1].height = ns_image_width (bitmap);
   dpyinfo->bitmaps[id - 1].width = ns_image_height (bitmap);
-  strcpy (dpyinfo->bitmaps[id - 1].file, SSDATA (file));
   return id;
 #endif
 
@@ -345,11 +344,10 @@ x_create_bitmap_from_file (struct frame *f, Lisp_Object file)
   dpyinfo->bitmaps[id - 1].pixmap = bitmap;
   dpyinfo->bitmaps[id - 1].have_mask = 0;
   dpyinfo->bitmaps[id - 1].refcount = 1;
-  dpyinfo->bitmaps[id - 1].file = xmalloc (SBYTES (file) + 1);
+  dpyinfo->bitmaps[id - 1].file = xlispstrdup (file);
   dpyinfo->bitmaps[id - 1].depth = 1;
   dpyinfo->bitmaps[id - 1].height = height;
   dpyinfo->bitmaps[id - 1].width = width;
-  strcpy (dpyinfo->bitmaps[id - 1].file, SSDATA (file));
 
   return id;
 #endif /* HAVE_X_WINDOWS */
@@ -1362,14 +1360,12 @@ static void cache_image (struct frame *f, struct image *img);
 struct image_cache *
 make_image_cache (void)
 {
-  struct image_cache *c = xzalloc (sizeof *c);
-  int size;
+  struct image_cache *c = xmalloc (sizeof *c);
 
-  size = 50;
-  c->images = xmalloc (size * sizeof *c->images);
-  c->size = size;
-  size = IMAGE_CACHE_BUCKETS_SIZE * sizeof *c->buckets;
-  c->buckets = xzalloc (size);
+  c->size = 50;
+  c->used = c->refcount = 0;
+  c->images = xmalloc (c->size * sizeof *c->images);
+  c->buckets = xzalloc (IMAGE_CACHE_BUCKETS_SIZE * sizeof *c->buckets);
   return c;
 }
 
@@ -7740,6 +7736,7 @@ enum imagemagick_keyword_index
     IMAGEMAGICK_WIDTH,
     IMAGEMAGICK_MAX_HEIGHT,
     IMAGEMAGICK_MAX_WIDTH,
+    IMAGEMAGICK_FORMAT,
     IMAGEMAGICK_ROTATION,
     IMAGEMAGICK_CROP,
     IMAGEMAGICK_LAST
@@ -7764,6 +7761,7 @@ static struct image_keyword imagemagick_format[IMAGEMAGICK_LAST] =
     {":width",		IMAGE_INTEGER_VALUE,			0},
     {":max-height",	IMAGE_INTEGER_VALUE,			0},
     {":max-width",	IMAGE_INTEGER_VALUE,			0},
+    {":format",		IMAGE_SYMBOL_VALUE,			0},
     {":rotation",	IMAGE_NUMBER_VALUE,     		0},
     {":crop",		IMAGE_DONT_CHECK_VALUE_TYPE,		0}
   };
@@ -7842,6 +7840,236 @@ imagemagick_error (MagickWand *wand)
   description = (char *) MagickRelinquishMemory (description);
 }
 
+/* Possibly give ImageMagick some extra help to determine the image
+   type by supplying a "dummy" filename based on the Content-Type.  */
+
+static char *
+imagemagick_filename_hint (Lisp_Object spec, char hint_buffer[MaxTextExtent])
+{
+  Lisp_Object symbol = intern ("image-format-suffixes");
+  Lisp_Object val = find_symbol_value (symbol);
+  Lisp_Object format;
+
+  if (! CONSP (val))
+    return NULL;
+
+  format = image_spec_value (spec, intern (":format"), NULL);
+  val = Fcar_safe (Fcdr_safe (Fassq (format, val)));
+  if (! STRINGP (val))
+    return NULL;
+
+  /* It's OK to truncate the hint if it has MaxTextExtent or more bytes,
+     as ImageMagick would ignore the extra bytes anyway.  */
+  snprintf (hint_buffer, MaxTextExtent, "/tmp/foo.%s", SSDATA (val));
+  return hint_buffer;
+}
+
+/* Animated images (e.g., GIF89a) are composed from one "master image"
+   (which is the first one, and then there's a number of images that
+   follow.  If following images have non-transparent colors, these are
+   composed "on top" of the master image.  So, in general, one has to
+   compute ann the preceding images to be able to display a particular
+   sub-image.
+
+   Computing all the preceding images is too slow, so we maintain a
+   cache of previously computed images.  We have to maintain a cache
+   separate from the image cache, because the images may be scaled
+   before display. */
+
+struct animation_cache
+{
+  char *signature;
+  MagickWand *wand;
+  int index;
+  EMACS_TIME update_time;
+  struct animation_cache *next;
+};
+
+static struct animation_cache *animation_cache = NULL;
+
+static struct animation_cache *
+imagemagick_create_cache (char *signature)
+{
+  struct animation_cache *cache = xmalloc (sizeof *cache);
+  cache->signature = signature;
+  cache->wand = 0;
+  cache->index = 0;
+  cache->next = 0;
+  cache->update_time = current_emacs_time ();
+  return cache;
+}
+
+/* Discard cached images that haven't been used for a minute. */
+static void
+imagemagick_prune_animation_cache (void)
+{
+  struct animation_cache **pcache = &animation_cache;
+  EMACS_TIME old = sub_emacs_time (current_emacs_time (),
+				   make_emacs_time (60, 0));
+
+  while (*pcache)
+    {
+      struct animation_cache *cache = *pcache;
+      if (EMACS_TIME_LE (old, cache->update_time))
+	pcache = &cache->next;
+      else
+	{
+	  DestroyString (cache->signature);
+	  if (cache->wand)
+	    DestroyMagickWand (cache->wand);
+	  *pcache = cache->next;
+	  xfree (cache);
+	}
+    }
+}
+
+static struct animation_cache *
+imagemagick_get_animation_cache (MagickWand *wand)
+{
+  char *signature = MagickGetImageSignature (wand);
+  struct animation_cache *cache;
+
+  imagemagick_prune_animation_cache ();
+  cache = animation_cache;
+
+  if (! cache)
+    {
+      animation_cache = imagemagick_create_cache (signature);
+      return animation_cache;
+    }
+
+  while (strcmp (signature, cache->signature) &&
+	 cache->next)
+    cache = cache->next;
+
+  if (strcmp (signature, cache->signature))
+    {
+      cache->next = imagemagick_create_cache (signature);
+      DestroyString (signature);
+      return cache->next;
+    }
+
+  cache->update_time = current_emacs_time ();
+  return cache;
+}
+
+static MagickWand *
+imagemagick_compute_animated_image (MagickWand *super_wand, int ino)
+{
+  int i;
+  MagickWand *composite_wand;
+  size_t dest_width, dest_height;
+  struct animation_cache *cache = imagemagick_get_animation_cache (super_wand);
+
+  MagickSetIteratorIndex (super_wand, 0);
+
+  if (ino == 0 || cache->wand == NULL || cache->index > ino)
+    {
+      composite_wand = MagickGetImage (super_wand);
+      if (cache->wand)
+	DestroyMagickWand (cache->wand);
+    }
+  else
+    composite_wand = cache->wand;
+
+  dest_width = MagickGetImageWidth (composite_wand);
+  dest_height = MagickGetImageHeight (composite_wand);
+
+  for (i = max (1, cache->index + 1); i <= ino; i++)
+    {
+      MagickWand *sub_wand;
+      PixelIterator *source_iterator, *dest_iterator;
+      PixelWand **source, **dest;
+      size_t source_width, source_height;
+      ssize_t source_left, source_top;
+      MagickPixelPacket pixel;
+      DisposeType dispose;
+      ptrdiff_t lines = 0;
+
+      MagickSetIteratorIndex (super_wand, i);
+      sub_wand = MagickGetImage (super_wand);
+
+      MagickGetImagePage (sub_wand, &source_width, &source_height,
+			  &source_left, &source_top);
+
+      /* This flag says how to handle transparent pixels.  */
+      dispose = MagickGetImageDispose (sub_wand);
+
+      source_iterator = NewPixelIterator (sub_wand);
+      if (! source_iterator)
+	{
+	  DestroyMagickWand (composite_wand);
+	  DestroyMagickWand (sub_wand);
+	  cache->wand = NULL;
+	  image_error ("Imagemagick pixel iterator creation failed",
+		       Qnil, Qnil);
+	  return NULL;
+	}
+
+      dest_iterator = NewPixelIterator (composite_wand);
+      if (! dest_iterator)
+	{
+	  DestroyMagickWand (composite_wand);
+	  DestroyMagickWand (sub_wand);
+	  DestroyPixelIterator (source_iterator);
+	  cache->wand = NULL;
+	  image_error ("Imagemagick pixel iterator creation failed",
+		       Qnil, Qnil);
+	  return NULL;
+	}
+
+      /* The sub-image may not start at origin, so move the destination
+	 iterator to where the sub-image should start. */
+      if (source_top > 0)
+	{
+	  PixelSetIteratorRow (dest_iterator, source_top);
+	  lines = source_top;
+	}
+
+      while ((source = PixelGetNextIteratorRow (source_iterator, &source_width))
+	     != NULL)
+	{
+	  ptrdiff_t x;
+
+	  /* Sanity check.  This shouldn't happen, but apparently
+	     does in some pictures.  */
+	  if (++lines >= dest_height)
+	    break;
+
+	  dest = PixelGetNextIteratorRow (dest_iterator, &dest_width);
+	  for (x = 0; x < source_width; x++)
+	    {
+	      /* Sanity check.  This shouldn't happen, but apparently
+		 also does in some pictures.  */
+	      if (x + source_left > dest_width)
+		break;
+	      /* Normally we only copy over non-transparent pixels,
+		 but if the disposal method is "Background", then we
+		 copy over all pixels.  */
+	      if (dispose == BackgroundDispose ||
+		  PixelGetAlpha (source[x]))
+		{
+		  PixelGetMagickColor (source[x], &pixel);
+		  PixelSetMagickColor (dest[x + source_left], &pixel);
+		}
+	    }
+	  PixelSyncIterator (dest_iterator);
+	}
+
+      DestroyPixelIterator (source_iterator);
+      DestroyPixelIterator (dest_iterator);
+      DestroyMagickWand (sub_wand);
+    }
+
+  /* Cache a copy for the next iteration.  The current wand will be
+     destroyed by the caller. */
+  cache->wand = CloneMagickWand (composite_wand);
+  cache->index = ino;
+
+  return composite_wand;
+}
+
+
 /* Helper function for imagemagick_load, which does the actual loading
    given contents and size, apart from frame and image structures,
    passed from imagemagick_load.  Uses librimagemagick to do most of
@@ -7864,7 +8092,6 @@ imagemagick_load_image (struct frame *f, struct image *img,
   XImagePtr ximg;
   int x, y;
   MagickWand *image_wand;
-  MagickWand *ping_wand;
   PixelIterator *iterator;
   PixelWand **pixels, *bg_wand = NULL;
   MagickPixelPacket  pixel;
@@ -7875,6 +8102,8 @@ imagemagick_load_image (struct frame *f, struct image *img,
   int desired_width, desired_height;
   double rotation;
   int pixelwidth;
+  char hint_buffer[MaxTextExtent];
+  char *filename_hint = NULL;
 
   /* Handle image index for image types who can contain more than one image.
      Interface :index is same as for GIF.  First we "ping" the image to see how
@@ -7885,48 +8114,48 @@ imagemagick_load_image (struct frame *f, struct image *img,
   MagickWandGenesis ();
   image = image_spec_value (img->spec, QCindex, NULL);
   ino = INTEGERP (image) ? XFASTINT (image) : 0;
-  ping_wand = NewMagickWand ();
-  /* MagickSetResolution (ping_wand, 2, 2);   (Bug#10112)  */
+  image_wand = NewMagickWand ();
 
-  status = filename
-    ? MagickPingImage (ping_wand, filename)
-    : MagickPingImageBlob (ping_wand, contents, size);
+  if (filename)
+    status = MagickReadImage (image_wand, filename);
+  else
+    {
+      filename_hint = imagemagick_filename_hint (img->spec, hint_buffer);
+      MagickSetFilename (image_wand, filename_hint);
+      status = MagickReadImageBlob (image_wand, contents, size);
+    }
 
   if (status == MagickFalse)
     {
-      imagemagick_error (ping_wand);
-      DestroyMagickWand (ping_wand);
+      imagemagick_error (image_wand);
+      DestroyMagickWand (image_wand);
       return 0;
     }
 
-  if (ino < 0 || ino >= MagickGetNumberImages (ping_wand))
+  if (ino < 0 || ino >= MagickGetNumberImages (image_wand))
     {
       image_error ("Invalid image number `%s' in image `%s'",
 		   image, img->spec);
-      DestroyMagickWand (ping_wand);
+      DestroyMagickWand (image_wand);
       return 0;
     }
 
-  if (MagickGetNumberImages (ping_wand) > 1)
+  if (MagickGetNumberImages (image_wand) > 1)
     img->lisp_data =
       Fcons (Qcount,
-             Fcons (make_number (MagickGetNumberImages (ping_wand)),
+             Fcons (make_number (MagickGetNumberImages (image_wand)),
                     img->lisp_data));
 
-  DestroyMagickWand (ping_wand);
-
-  /* Now we know how many images are inside the file.  If it's not a
-     bundle, the number is one.  Load the image data.  */
-
-  image_wand = NewMagickWand ();
-
-  if ((filename
-       ? MagickReadImage (image_wand, filename)
-       : MagickReadImageBlob (image_wand, contents, size))
-      == MagickFalse)
+  /* If we have an animated image, get the new wand based on the
+     "super-wand". */
+  if (MagickGetNumberImages (image_wand) > 1)
     {
-      imagemagick_error (image_wand);
-      goto imagemagick_error;
+      MagickWand *super_wand = image_wand;
+      image_wand = imagemagick_compute_animated_image (super_wand, ino);
+      if (! image_wand)
+	image_wand = super_wand;
+      else
+	DestroyMagickWand (super_wand);
     }
 
   /* Retrieve the frame's background color, for use later.  */

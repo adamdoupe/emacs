@@ -4340,14 +4340,16 @@ fi
 
 
 case $opsys in
-  dnl Emacs supplies its own malloc, but glib (part of Gtk+) calls
-  dnl memalign and on Cygwin, that becomes the Cygwin-supplied memalign.
-  dnl As malloc is not the Cygwin malloc, the Cygwin memalign always
-  dnl returns ENOSYS.  A workaround is to set G_SLICE=always-malloc. */
+  dnl Emacs supplies its own malloc, but glib calls posix_memalign,
+  dnl and on Cygwin prior to version 1.7.24 that becomes the
+  dnl Cygwin-supplied posix_memalign.  As malloc is not the Cygwin
+  dnl malloc, the Cygwin posix_memalign always returns ENOSYS.  A
+  dnl workaround is to set G_SLICE=always-malloc.  This is no longer
+  dnl needed starting with cygwin-1.7.24, and it is no longer
+  dnl effective starting with glib-2.36. */
   cygwin)
     AC_DEFINE(G_SLICE_ALWAYS_MALLOC, 1, [Define to set the
-      G_SLICE environment variable to "always-malloc" at startup, if
-      using GTK.])
+      G_SLICE environment variable to "always-malloc" at startup.])
     ;;
 
   hpux11)
@@ -4439,7 +4441,7 @@ fi
 AC_DEFINE_UNQUOTED(EMACS_CONFIGURATION,  "${canonical}",
 		   [Define to the canonical Emacs configuration name.])
 dnl Replace any embedded " characters (bug#13274).
-emacs_config_options=`echo "$emacs_config_options " | sed -e 's/--no-create //' -e 's/--no-recursion //' -e 's/ *$//' -e "s/\"/'/g"`
+emacs_config_options=`echo "$emacs_config_options " | sed -e 's/--no-create //' -e 's/--no-recursion //' -e 's/ *$//' -e "s/\"/'/g" -e 's/\\\\/\\\\\\\\/g'`
 AC_DEFINE_UNQUOTED(EMACS_CONFIG_OPTIONS, "${emacs_config_options}",
 		   [Define to the options passed to configure.])
 AH_TEMPLATE(config_opsysfile, [Some platforms that do not use configure

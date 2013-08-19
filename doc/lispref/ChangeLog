@@ -1,3 +1,41 @@
+2013-08-18  Xue Fuqiao  <xfq.free@gmail.com>
+
+	* positions.texi (Positions): Improve indexing.
+
+2013-08-18  Eli Zaretskii  <eliz@gnu.org>
+
+	* markers.texi (The Region): Improve indexing.
+
+2013-08-17  Xue Fuqiao  <xfq.free@gmail.com>
+
+	* modes.texi (SMIE, SMIE Grammar, SMIE Indentation): Add some indexes.
+
+	* text.texi (Maintaining Undo): Mention interactive call of
+	buffer-disable-undo.
+	(Filling): Add cross-reference for hard newlines.
+	(Sorting): Fix indentation.
+	(Columns): Comment out undefined behavior.
+	(Case Changes): Fix an `args-out-of-range' error in the example.
+
+2013-08-16  Xue Fuqiao  <xfq.free@gmail.com>
+
+	* text.texi (Insertion): Refine.
+	(Margins): Add an index.
+	(Undo): Doc fix for `buffer-undo-list'.
+
+	* positions.texi (Character Motion):
+	* markers.texi (Moving Markers):
+	(Creating Markers): Comment out undefined behavior.
+
+2013-08-15  Xue Fuqiao  <xfq.free@gmail.com>
+
+	* markers.texi (The Region): Add/move indexes.
+
+2013-08-13  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* display.texi (ImageMagick Images): Mention :content-type and
+	`image-content-type-suffixes'.
+
 2013-08-13  Xue Fuqiao  <xfq.free@gmail.com>
 
 	* positions.texi (Word Motion): Remove redundant sentence.

@@ -692,22 +692,14 @@ affects all frames on the same terminal device.  */)
                        ? FRAME_TTY (XFRAME (selected_frame))->name
                        : NULL));
       if (!NILP (tty))
-        {
-          name = alloca (SBYTES (tty) + 1);
-          memcpy (name, SSDATA (tty), SBYTES (tty));
-          name[SBYTES (tty)] = 0;
-        }
+	name = xlispstrdupa (tty);
 
       tty_type = get_future_frame_param
         (Qtty_type, parms, (FRAME_TERMCAP_P (XFRAME (selected_frame))
                             ? FRAME_TTY (XFRAME (selected_frame))->type
                             : NULL));
       if (!NILP (tty_type))
-        {
-          type = alloca (SBYTES (tty_type) + 1);
-          memcpy (type, SSDATA (tty_type), SBYTES (tty_type));
-          type[SBYTES (tty_type)] = 0;
-        }
+	type = xlispstrdupa (tty_type);
 
       t = init_tty (name, type, 0); /* Errors are not fatal.  */
     }
@@ -1205,10 +1197,18 @@ delete_frame (Lisp_Object frame, Lisp_Object force)
   /* Don't let the frame remain selected.  */
   if (f == sf)
     {
-      Lisp_Object tail, frame1;
+      Lisp_Object tail;
+      Lisp_Object frame1 = Qnil;
 
-      /* Look for another visible frame on the same terminal.  */
-      frame1 = next_frame (frame, Qvisible);
+      /* Look for another visible frame on the same terminal.
+	 Do not call next_frame here because it may loop forever.
+	 See http://debbugs.gnu.org/cgi/bugreport.cgi?bug=15025.  */
+      FOR_EACH_FRAME (tail, frame1)
+	if (!EQ (frame, frame1)
+	    && (FRAME_TERMINAL (XFRAME (frame))
+		== FRAME_TERMINAL (XFRAME (frame1)))
+	    && FRAME_VISIBLE_P (XFRAME (frame1)))
+         break;
 
       /* If there is none, find *some* other frame.  */
       if (NILP (frame1) || EQ (frame1, frame))

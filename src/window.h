@@ -141,21 +141,9 @@ struct window
        it yet, or if the frame doesn't have any scroll bars, this is nil.  */
     Lisp_Object vertical_scroll_bar;
 
-    /* Pixel width of scroll bars.
-       A value of nil or t means use frame values.  */
-    Lisp_Object scroll_bar_width;
-
     /* Type of vertical scroll bar.  A value of nil means
        no scroll bar.  A value of t means use frame value.  */
     Lisp_Object vertical_scroll_bar_type;
-
-    /* Z - the buffer position of the last glyph in the current
-       matrix of W.  Only valid if window_end_valid is nonzero.  */
-    Lisp_Object window_end_pos;
-
-    /* Glyph matrix row of the last glyph in the current matrix
-       of W.  Only valid if window_end_valid is nonzero.  */
-    Lisp_Object window_end_vpos;
 
     /* Display-table to use for displaying chars in this window.
        Nil means use the buffer's own display-table.  */
@@ -269,6 +257,18 @@ struct window
     int left_margin_cols;
     int right_margin_cols;
 
+    /* Pixel width of scroll bars.
+       A value of -1 means use frame values.  */
+    int scroll_bar_width;
+
+    /* Z - the buffer position of the last glyph in the current
+       matrix of W.  Only valid if window_end_valid is nonzero.  */
+    ptrdiff_t window_end_pos;
+
+    /* Glyph matrix row of the last glyph in the current matrix
+       of W.  Only valid if window_end_valid is nonzero.  */
+    int window_end_vpos;
+
     /* Non-zero if this window is a minibuffer window.  */
     unsigned mini : 1;
 
@@ -364,16 +364,6 @@ WINDOW_INLINE void
 wset_vertical_scroll_bar (struct window *w, Lisp_Object val)
 {
   w->vertical_scroll_bar = val;
-}
-WINDOW_INLINE void
-wset_window_end_pos (struct window *w, Lisp_Object val)
-{
-  w->window_end_pos = val;
-}
-WINDOW_INLINE void
-wset_window_end_vpos (struct window *w, Lisp_Object val)
-{
-  w->window_end_vpos = val;
 }
 WINDOW_INLINE void
 wset_prev_buffers (struct window *w, Lisp_Object val)
@@ -695,8 +685,7 @@ wset_next_buffers (struct window *w, Lisp_Object val)
    nonzero.  */
 
 #define WINDOW_CONFIG_SCROLL_BAR_WIDTH(w)		\
-  (INTEGERP (w->scroll_bar_width)			\
-   ? XFASTINT (w->scroll_bar_width)			\
+  (w->scroll_bar_width >= 0 ? w->scroll_bar_width	\
    : FRAME_CONFIG_SCROLL_BAR_WIDTH (WINDOW_XFRAME (w)))
 
 /* Width that a scroll bar in window W should have, if there is one.
@@ -704,8 +693,8 @@ wset_next_buffers (struct window *w, Lisp_Object val)
    this is still nonzero.  */
 
 #define WINDOW_CONFIG_SCROLL_BAR_COLS(w)		\
-  (INTEGERP (w->scroll_bar_width)			\
-   ? ((XFASTINT (w->scroll_bar_width)			\
+  (w->scroll_bar_width >= 0				\
+   ? ((w->scroll_bar_width				\
        + WINDOW_FRAME_COLUMN_WIDTH (w) - 1)		\
       / WINDOW_FRAME_COLUMN_WIDTH (w))			\
    : FRAME_CONFIG_SCROLL_BAR_COLS (WINDOW_XFRAME (w)))
@@ -916,10 +905,6 @@ extern int update_mode_lines;
    redisplay that finished.  */
 
 extern int windows_or_buffers_changed;
-
-/* Nonzero means a frame's cursor type has been changed.  */
-
-extern int cursor_type_changed;
 
 /* If *ROWS or *COLS are too small a size for FRAME, set them to the
    minimum allowable size.  */

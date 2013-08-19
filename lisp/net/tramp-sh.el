@@ -26,21 +26,15 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))	; ignore-errors
 (require 'tramp)
 
-;; Pacify byte-compiler.  The function is needed on XEmacs only.  I'm
-;; not sure at all that this is the right way to do it, but let's hope
-;; it works for now, and wait for a guru to point out the Right Way to
-;; achieve this.
-;;(eval-when-compile
-;;  (unless (fboundp 'dired-insert-set-properties)
-;;    (fset 'dired-insert-set-properties 'ignore)))
-;; Gerd suggests this:
-(eval-when-compile (require 'dired))
-;; Note that dired is required at run-time, too, when it is needed.
-;; It is only needed on XEmacs for the function
-;; `dired-insert-set-properties'.
+;; Pacify byte-compiler.
+(eval-when-compile
+  (require 'cl)
+  (require 'dired))
+(defvar directory-sep-char)
+(defvar tramp-gw-tunnel-method)
+(defvar tramp-gw-socks-method)
 
 (defcustom tramp-inline-compress-start-size 4096
   "The minimum size of compressing where inline transfer.
@@ -938,7 +932,7 @@ target of the symlink differ."
 	(tramp-shell-quote-argument l-localname))
        t))))
 
-(defun tramp-sh-handle-file-truename (filename &optional counter prev-dirs)
+(defun tramp-sh-handle-file-truename (filename)
   "Like `file-truename' for Tramp files."
   (with-parsed-tramp-file-name (expand-file-name filename) nil
     (tramp-make-tramp-file-name method user host
@@ -1837,7 +1831,7 @@ tramp-sh-handle-file-name-all-completions: internal error accessing `%s': `%s'"
      'copy-file (list filename newname ok-if-already-exists keep-date)))))
 
 (defun tramp-sh-handle-copy-directory
-  (dirname newname &optional keep-date parents copy-contents)
+  (dirname newname &optional keep-date parents _copy-contents)
   "Like `copy-directory' for Tramp files."
   (let ((t1 (tramp-tramp-file-p dirname))
 	(t2 (tramp-tramp-file-p newname)))
@@ -1911,8 +1905,7 @@ file names."
 	(t2 (tramp-tramp-file-p newname))
 	(length (nth 7 (file-attributes (file-truename filename))))
 	(attributes (and preserve-extended-attributes
-			 (apply 'file-extended-attributes (list filename))))
-	pr tm)
+			 (apply 'file-extended-attributes (list filename)))))
 
     (with-parsed-tramp-file-name (if t1 filename newname) nil
       (when (and (not ok-if-already-exists) (file-exists-p newname))
@@ -2433,7 +2426,7 @@ This is like `dired-recursive-delete-directory' for Tramp files."
 	 (tramp-error
 	  v 'file-error "Failed to recursively delete %s" filename))))
 
-(defun tramp-sh-handle-dired-compress-file (file &rest ok-flag)
+(defun tramp-sh-handle-dired-compress-file (file &rest _ok-flag)
   "Like `dired-compress-file' for Tramp files."
   ;; OK-FLAG is valid for XEmacs only, but not implemented.
   ;; Code stolen mainly from dired-aux.el.
@@ -2978,7 +2971,7 @@ the result will be a local, non-Tramp, filename."
 	(inhibit-file-name-operation 'insert-file-contents))
     (unwind-protect
 	(progn
-	  (fset 'find-buffer-file-type (lambda (filename) t))
+	  (fset 'find-buffer-file-type (lambda (_filename) t))
 	  (insert-file-contents filename visit beg end replace))
       ;; Save exit.
       (if find-buffer-file-type-function
@@ -3383,7 +3376,7 @@ Fall back to normal file name handler if no Tramp handler exists."
 	 ;; Default file name handlers, we don't care.
 	 (t (tramp-run-real-handler operation args)))))))
 
-(defun tramp-sh-handle-file-notify-add-watch (file-name flags callback)
+(defun tramp-sh-handle-file-notify-add-watch (file-name flags _callback)
   "Like `file-notify-add-watch' for Tramp files."
   (setq file-name (expand-file-name file-name))
   (with-parsed-tramp-file-name file-name nil
@@ -3749,7 +3742,7 @@ file exists and nonzero exit status otherwise."
 Looks at process PROC to see if a shell prompt appears in TIMEOUT
 seconds.  If not, it produces an error message with the given ERROR-ARGS."
   (let ((vec (tramp-get-connection-property proc "vector" nil)))
-    (condition-case err
+    (condition-case nil
 	(tramp-wait-for-regexp
 	 proc timeout
 	 (format
@@ -4203,9 +4196,6 @@ Goes through the list `tramp-inline-compress-commands'."
 	(tramp-set-connection-property p "inline-decompress" nil)
 	(tramp-message
 	 vec 2 "Couldn't find an inline transfer compress command")))))
-
-(defvar tramp-gw-tunnel-method)
-(defvar tramp-gw-socks-method)
 
 (defun tramp-compute-multi-hops (vec)
   "Expands VEC according to `tramp-default-proxies-alist'.

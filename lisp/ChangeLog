@@ -1,3 +1,163 @@
+2013-08-17  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp.el:
+	* net/tramp-adb.el:
+	* net/tramp-cmds.el:
+	* net/tramp-ftp.el:
+	* net/tramp-gvfs.el:
+	* net/tramp-gw.el:
+	* net/tramp-sh.el: Don't wrap external variable declarations by
+	`eval-when-compile'.
+
+2013-08-16  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* net/shr.el (shr-rescale-image): Use ImageMagick even for GIFs
+	now that Emacs supports ImageMagick animations.
+
+2013-08-16  Michael Albinus  <michael.albinus@gmx.de>
+
+	* net/tramp-cmds.el (top): Don't declare `buffer-name'.
+	(tramp-append-tramp-buffers): Rewrite buffer local variables part.
+
+2013-08-16  Martin Rudalics  <rudalics@gmx.at>
+
+	* window.el (mouse-autoselect-window-select): Do autoselect when
+	mouse pointer is on margin.
+
+2013-08-16  William Parsons  <wbparsons@alum.mit.edu>  (tiny change)
+
+	* net/ange-ftp.el (ange-ftp-skip-msgs): Add 500 EPSV.  (Bug#1972)
+
+2013-08-16  Glenn Morris  <rgm@gnu.org>
+
+	* net/ange-ftp.el (ange-ftp-good-msgs, ange-ftp-get-pwd):
+	Handle "Remote Directory" response of some clients.  (Bug#15058)
+
+	* emacs-lisp/bytecomp.el (byte-compile-make-variable-buffer-local):
+	Tweak warning.  (Bug#14926)
+
+	* menu-bar.el (send-mail-item-name, read-mail-item-name): Remove.
+	(menu-bar-tools-menu): Simplify news and mail items.  (Bug#15095)
+
+	* image-mode.el (image-mode-map): Add menu items to reverse,
+	increase, decrease, reset animation speed.
+	(image--set-speed, image-increase-speed, image-decrease-speed)
+	(image-reverse-speed, image-reset-speed): New functions.
+	(image-mode-map): Add bindings for speed commands.
+
+	* image.el (image-animate-get-speed, image-animate-set-speed):
+	New functions.
+	(image-animate-timeout): Respect image :speed property.
+
+2013-08-15  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	* emacs-lisp/debug.el (debugger-setup-buffer): Put point on the
+	previous line (bug#15101).
+	(debugger-eval-expression, debugger-record-expression):
+	Use read--expression (bug#15102).
+
+2013-08-15  Michael Albinus  <michael.albinus@gmx.de>
+
+	Remove byte compiler warnings, visible when compiling with
+	`byte-compile-force-lexical-warnings' set to t.
+
+	* net/tramp.el (tramp-debug-message, tramp-message, tramp-error)
+	(tramp-error-with-buffer): Rename ARGS to ARGUMENTS and BUFFER to BUF.
+	(tramp-handle-unhandled-file-name-directory)
+	(tramp-handle-file-notify-add-watch, tramp-action-login)
+	(tramp-action-succeed, tramp-action-permission-denied)
+	(tramp-action-terminal, tramp-action-process-alive): Prefix unused
+	arguments with "_".
+
+	* net/tramp-adb.el (tramp-adb-parse-device-names)
+	(tramp-adb-handle-insert-directory, tramp-adb-handle-delete-file)
+	(tramp-adb-handle-copy-file): Prefix unused arguments with "_".
+	(tramp-adb-handle-file-truename): Remove unused arguments.
+
+	* net/tramp-cache.el (tramp-flush-directory-property)
+	(tramp-flush-connection-property, tramp-list-connections)
+	(tramp-parse-connection-properties): Prefix unused arguments with "_".
+
+	* net/tramp-compat.el (tramp-compat-make-temp-file):
+	Rename FILENAME to F.
+
+	* net/tramp-gvfs.el (tramp-gvfs-handle-file-notify-add-watch)
+	(tramp-gvfs-handle-write-region, tramp-bluez-parse-device-names)
+	(tramp-zeroconf-parse-workstation-device-names)
+	(tramp-zeroconf-parse-webdav-device-names)
+	(tramp-synce-parse-device-names): Prefix unused arguments with "_".
+
+	* net/tramp-gw.el (tramp-gw-gw-proc-sentinel)
+	(tramp-gw-aux-proc-sentinel): Prefix unused arguments with "_".
+
+	* net/tramp-sh.el (tramp-sh-handle-file-truename): Remove unused
+	arguments.
+	(tramp-sh-handle-copy-file, tramp-sh-handle-dired-compress-file)
+	(tramp-sh-handle-insert-file-contents-literally)
+	(tramp-sh-handle-file-notify-add-watch): Prefix unused arguments
+	with "_".
+	(tramp-do-copy-or-rename-file, tramp-barf-if-no-shell-prompt):
+	Remove unused variables.
+
+	* net/tramp-smb.el (tramp-smb-handle-copy-directory)
+	(tramp-smb-handle-copy-file, tramp-smb-handle-delete-file)
+	(tramp-smb-read-file-entry): Prefix unused arguments with "_".
+
+	* net/tramp-uu.el (tramp-uu-b64-alphabet, tramp-uu-b64-char-to-byte):
+	Make them a defconst.
+	(tramp-uuencode-region): Remove unused variable.
+
+2013-08-14  Juanma Barranquero  <lekktu@gmail.com>
+
+	* frameset.el (frameset--prop-setter): New function.
+	(frameset-prop): Add gv-setter declaration.
+	(frameset-filter-minibuffer): Deal with the case that the minibuffer
+	parameter was already set in FILTERED.  Doc fix.
+	(frameset--record-minibuffer-relationships): Allow saving a
+	minibufferless frame without its corresponding minibuffer frame.
+	(frameset--reuse-frame): Accept a match from an orphaned minibufferless
+	frame, if the frame id matches.
+	(frameset--minibufferless-last-p): Sort non-orphaned minibufferless
+	frames before orphaned ones.
+	(frameset-restore): Warn about orphaned windows, instead of error out.
+
+2013-08-14  Martin Rudalics  <rudalics@gmx.at>
+
+	* window.el (window-make-atom): Don't overwrite parameter
+	already present.
+	(display-buffer-in-atom-window): Handle special case where we
+	split an already atomic window.
+	(window--major-non-side-window, display-buffer-in-side-window)
+	(window--side-check): Ignore minibuffer window when walking
+	window tree.
+	(window-deletable-p): Return 'frame only if no other frame uses
+	our minibuffer window.
+	(record-window-buffer): Run buffer-list-update-hook.
+	(split-window): Make sure window--check-frame won't destroy an
+	existing atomic window in case the new window gets nested
+	inside.
+	(display-buffer-at-bottom): Ignore minibuffer window when
+	walking window tree.  Don't split a side window.
+	(pop-to-buffer): Don't set-buffer here, the select-window call
+	should do that.
+	(mouse-autoselect-window-select): Autoselect only if we are in the
+	text portion of the window.
+
+2013-08-13  Lars Magne Ingebrigtsen  <larsi@gnus.org>
+
+	* net/shr.el (shr-parse-image-data): New function to grab both the
+	data itself and the Content-Type.
+	(shr-put-image): Use it.
+
+	* net/eww.el (eww-display-image): Ditto.
+
+	* image.el (image-content-type-suffixes): New variable.
+
+2013-08-13  Fabián Ezequiel Gallina  <fgallina@gnu.org>
+
+	* progmodes/python.el (python-imenu--build-tree)
+	(python-imenu--put-parent): Simplify and Fix (GH bug 146).
+
 2013-08-13  Xue Fuqiao  <xfq.free@gmail.com>
 
 	* simple.el (backward-word): Mention the optional argument.

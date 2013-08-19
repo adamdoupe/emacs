@@ -95,12 +95,14 @@ unwind_decompress (void *ddata)
   struct decompress_unwind_data *data = ddata;
   fn_inflateEnd (data->stream);
 
-  /* Delete any uncompressed data already inserted and restore point.  */
+  /* Delete any uncompressed data already inserted on error.  */
   if (data->start)
-    {
-      del_range (data->start, PT);
-      SET_PT (data->old_point);
-    }
+    del_range (data->start, PT);
+
+  /* Put point where it was, or if the buffer has shrunk because the
+     compressed data is bigger than the uncompressed, at
+     point-max.  */
+  SET_PT (min (data->old_point, ZV));
 }
 
 DEFUN ("zlib-available-p", Fzlib_available_p, Szlib_available_p, 0, 0, 0,
@@ -114,7 +116,8 @@ DEFUN ("zlib-available-p", Fzlib_available_p, Szlib_available_p, 0, 0, 0,
   else
     {
       Lisp_Object status;
-      status = init_zlib_functions () ? Qt : Qnil;
+      zlib_initialized = init_zlib_functions ();
+      status = zlib_initialized ? Qt : Qnil;
       Vlibrary_cache = Fcons (Fcons (Qzlib_dll, status), Vlibrary_cache);
       return status;
     }
@@ -162,7 +165,7 @@ This function can be called only in unibyte buffers.  */)
   stream.avail_in = 0;
   stream.next_in = Z_NULL;
 
-  /* The magic number 32 apparently means "autodect both the gzip and
+  /* The magic number 32 apparently means "autodetect both the gzip and
      zlib formats" according to zlib.h.  */
   if (fn_inflateInit2 (&stream, MAX_WBITS + 32) != Z_OK)
     return Qnil;
@@ -183,12 +186,10 @@ This function can be called only in unibyte buffers.  */)
     {
       /* Maximum number of bytes that one 'inflate' call should read and write.
 	 Do not make avail_out too large, as that might unduly delay C-g.
-	 In any case zlib requires that these values not exceed UINT_MAX.  */
+	 zlib requires that avail_in and avail_out not exceed UINT_MAX.  */
       ptrdiff_t avail_in = min (iend - pos_byte, UINT_MAX);
-      enum { avail_out = 1 << 14 };
-      verify (avail_out <= UINT_MAX);
-
-      ptrdiff_t decompressed;
+      int avail_out = 16 * 1024;
+      int decompressed;
 
       if (GAP_SIZE < avail_out)
 	make_gap (avail_out - GAP_SIZE);

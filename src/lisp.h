@@ -4255,9 +4255,16 @@ extern void *xnrealloc (void *, ptrdiff_t, ptrdiff_t);
 extern void *xpalloc (void *, ptrdiff_t *, ptrdiff_t, ptrdiff_t, ptrdiff_t);
 
 extern char *xstrdup (const char *);
+extern char *xlispstrdup (Lisp_Object);
 extern void xputenv (const char *);
 
 extern char *egetenv (const char *);
+
+/* Copy Lisp string to temporary (allocated on stack) C string.  */
+
+#define xlispstrdupa(string)			\
+  memcpy (alloca (SBYTES (string) + 1),		\
+	  SSDATA (string), SBYTES (string) + 1)
 
 /* Set up the name of the machine we're running on.  */
 extern void init_system_name (void);
@@ -4335,6 +4342,12 @@ extern void *record_xmalloc (size_t);
       memory_full (SIZE_MAX);				       \
   } while (0)
 
+/* Do a `for' loop over alist values.  */
+
+#define FOR_EACH_ALIST_VALUE(head_var, list_var, value_var)		\
+  for (list_var = head_var;						\
+       (CONSP (list_var) && (value_var = XCDR (XCAR (list_var)), 1));	\
+       list_var = XCDR (list_var))
 
 /* Check whether it's time for GC, and run it if so.  */
 
