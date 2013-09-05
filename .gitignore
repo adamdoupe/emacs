@@ -208,3 +208,4 @@ config.log
 config.status
 lib-src/*.o
 lib/*.a
+.DS_Store
