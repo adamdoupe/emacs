@@ -1234,14 +1234,14 @@ target of the symlink differ."
 
 ;; This function makes the same assumption as
 ;; `tramp-sh-handle-set-visited-file-modtime'.
-(defun tramp-sh-handle-verify-visited-file-modtime (buf)
+(defun tramp-sh-handle-verify-visited-file-modtime (&optional buf)
   "Like `verify-visited-file-modtime' for Tramp files.
 At the time `verify-visited-file-modtime' calls this function, we
 already know that the buffer is visiting a file and that
 `visited-file-modtime' does not return 0.  Do not call this
 function directly, unless those two cases are already taken care
 of."
-  (with-current-buffer buf
+  (with-current-buffer (or buf (current-buffer))
     (let ((f (buffer-file-name)))
       ;; There is no file visiting the buffer, or the buffer has no
       ;; recorded last modification time, or there is no established
@@ -2500,8 +2500,8 @@ This is like `dired-recursive-delete-directory' for Tramp files."
 			'file-name-nondirectory (list localname)))
         (setq localname (tramp-run-real-handler
 			 'file-name-directory (list localname))))
-      (unless full-directory-p
-        (setq switches (add-to-list 'switches "-d" 'append)))
+      (unless (or full-directory-p (member "-d" switches))
+        (setq switches (append switches '("-d"))))
       (setq switches (mapconcat 'tramp-shell-quote-argument switches " "))
       (when wildcard
 	(setq switches (concat switches " " wildcard)))
@@ -4252,7 +4252,7 @@ Gateway hops are already opened."
 		  ?h (or (tramp-file-name-host (car target-alist)) ""))))
 	  (with-parsed-tramp-file-name proxy l
 	    ;; Add the hop.
-	    (add-to-list 'target-alist l)
+	    (pushnew l target-alist :test #'equal)
 	    ;; Start next search.
 	    (setq choices tramp-default-proxies-alist)))))
 
@@ -4270,11 +4270,11 @@ Gateway hops are already opened."
 	   vec 'file-error
 	   "Connection `%s' is not supported for gateway access." hop))
 	;; Open the gateway connection.
-	(add-to-list
-	 'target-alist
+	(pushnew
 	 (vector
 	  (tramp-file-name-method hop) (tramp-file-name-user hop)
-	  (tramp-compat-funcall 'tramp-gw-open-connection vec gw hop) nil nil))
+	  (tramp-compat-funcall 'tramp-gw-open-connection vec gw hop) nil nil)
+	 target-alist :test #'equal)
 	;; For the password prompt, we need the correct values.
 	;; Therefore, we must remember the gateway vector.  But we
 	;; cannot do it as connection property, because it shouldn't
@@ -4326,6 +4326,8 @@ Gateway hops are already opened."
   "Maybe open a connection VEC.
 Does not do anything if a connection is already open, but re-opens the
 connection if a previous connection has died for some reason."
+  (tramp-check-proper-host vec)
+
   (catch 'uname-changed
     (let ((p (tramp-get-connection-process vec))
 	  (process-name (tramp-get-connection-property vec "process-name" nil))

@@ -56,7 +56,7 @@
 # make docs
 #      Make Emacs documentation files from their sources; requires makeinfo.
 
-SHELL = /bin/sh
+SHELL = @SHELL@
 
 # This may not work with certain non-GNU make's.  It only matters when
 # inheriting a CDPATH not starting with the current directory.
@@ -352,9 +352,13 @@ epaths-force-w32: FRC
 	  -e "/^.*#/s|@SRC@|$${w32srcdir}|g") &&		\
 	${srcdir}/build-aux/move-if-change epaths.h.$$$$ src/epaths.h
 
+# If lib/Makefile would build files in '.', then build them before
+# building 'lib', to avoid races with parallel makes.
+lib: am--refresh
+
 lib-src src: $(NTDIR) lib
 
-src:	lib-src FRC
+src: lib-src
 
 # We need to build `emacs' in `src' to compile the *.elc files in `lisp'
 # and `leim'.
@@ -376,18 +380,15 @@ lib lib-src lisp leim nt: Makefile FRC
 # all preloaded elisp files, and only then dump the actual src/emacs, which
 # is not wrong, but is overkill in 99.99% of the cases.
 src: Makefile FRC
-	boot=bootstrap-emacs$(EXEEXT);                         \
-	if [ ! -x "src/$$boot" ]; then                                     \
-	    cd $@; $(MAKE) all $(MFLAGS)                                   \
-	      CC='${CC}' CFLAGS='${CFLAGS}' CPPFLAGS='${CPPFLAGS}'         \
-	      LDFLAGS='${LDFLAGS}' MAKE='${MAKE}' BOOTSTRAPEMACS="$$boot"; \
-	fi;
-	if [ -r .bzr/checkout/dirstate ]; then 			\
-	    vcswitness="`pwd`/.bzr/checkout/dirstate"; 	\
-	fi; 							\
-	cd $@; $(MAKE) all $(MFLAGS)                           \
-	  CC='${CC}' CFLAGS='${CFLAGS}' CPPFLAGS='${CPPFLAGS}' \
-	  LDFLAGS='${LDFLAGS}' MAKE='${MAKE}' BOOTSTRAPEMACS=""	\
+	dirstate='.bzr/checkout/dirstate';				\
+	vcswitness='$$(srcdir)/../'$$dirstate;				\
+	[ -r "$(srcdir)/$$dirstate" ] || vcswitness='';			\
+	cd $@ || exit;							\
+	boot=bootstrap-emacs$(EXEEXT);					\
+	[ ! -x "$$boot" ] || boot='';					\
+	$(MAKE) all $(MFLAGS)						\
+	  CC='${CC}' CFLAGS='${CFLAGS}' CPPFLAGS='${CPPFLAGS}'		\
+	  LDFLAGS='${LDFLAGS}' MAKE='${MAKE}' BOOTSTRAPEMACS="$$boot"	\
 	  VCSWITNESS="$$vcswitness"
 
 blessmail: Makefile src FRC
@@ -797,17 +798,17 @@ FRC:
 ###      target for GCC does not delete `libgcc.a', because recompiling it
 ###      is rarely necessary and takes a lot of time.
 mostlyclean: FRC
-	(cd src;      $(MAKE) $(MFLAGS) mostlyclean)
-	(cd oldXMenu; $(MAKE) $(MFLAGS) mostlyclean)
-	(cd lwlib;    $(MAKE) $(MFLAGS) mostlyclean)
-	(cd lib;      $(MAKE) $(MFLAGS) mostlyclean)
-	(cd lib-src;  $(MAKE) $(MFLAGS) mostlyclean)
-	(cd nt;       $(MAKE) $(MFLAGS) mostlyclean)
-	-(cd doc/emacs &&   $(MAKE) $(MFLAGS) mostlyclean)
-	-(cd doc/misc &&   $(MAKE) $(MFLAGS) mostlyclean)
-	-(cd doc/lispref &&   $(MAKE) $(MFLAGS) mostlyclean)
-	-(cd doc/lispintro &&   $(MAKE) $(MFLAGS) mostlyclean)
-	(cd leim;     $(MAKE) $(MFLAGS) mostlyclean)
+	cd src      && $(MAKE) $(MFLAGS) mostlyclean
+	cd oldXMenu && $(MAKE) $(MFLAGS) mostlyclean
+	cd lwlib    && $(MAKE) $(MFLAGS) mostlyclean
+	cd lib      && $(MAKE) $(MFLAGS) mostlyclean
+	cd lib-src  && $(MAKE) $(MFLAGS) mostlyclean
+	cd nt       && $(MAKE) $(MFLAGS) mostlyclean
+	-cd doc/emacs     && $(MAKE) $(MFLAGS) mostlyclean
+	-cd doc/misc      && $(MAKE) $(MFLAGS) mostlyclean
+	-cd doc/lispref   && $(MAKE) $(MFLAGS) mostlyclean
+	-cd doc/lispintro && $(MAKE) $(MFLAGS) mostlyclean
+	cd leim     && $(MAKE) $(MFLAGS) mostlyclean
 
 ### `clean'
 ###      Delete all files from the current directory that are normally
@@ -819,18 +820,18 @@ mostlyclean: FRC
 ###      Delete `.dvi' files here if they are not part of the distribution.
 clean: FRC
 	-rm -f etc/emacs.tmpdesktop
-	(cd src;      $(MAKE) $(MFLAGS) clean)
-	(cd oldXMenu; $(MAKE) $(MFLAGS) clean)
-	(cd lwlib;    $(MAKE) $(MFLAGS) clean)
-	(cd lib;      $(MAKE) $(MFLAGS) clean)
-	(cd lib-src;  $(MAKE) $(MFLAGS) clean)
-	(cd nt;       $(MAKE) $(MFLAGS) clean)
-	-(cd doc/emacs &&   $(MAKE) $(MFLAGS) clean)
-	-(cd doc/misc &&   $(MAKE) $(MFLAGS) clean)
-	-(cd doc/lispref &&   $(MAKE) $(MFLAGS) clean)
-	-(cd doc/lispintro &&   $(MAKE) $(MFLAGS) clean)
-	(cd leim;     $(MAKE) $(MFLAGS) clean)
-	(cd nextstep && $(MAKE) $(MFLAGS) clean)
+	cd src      && $(MAKE) $(MFLAGS) clean
+	cd oldXMenu && $(MAKE) $(MFLAGS) clean
+	cd lwlib    && $(MAKE) $(MFLAGS) clean
+	cd lib      && $(MAKE) $(MFLAGS) clean
+	cd lib-src  && $(MAKE) $(MFLAGS) clean
+	cd nt       && $(MAKE) $(MFLAGS) clean
+	-cd doc/emacs     && $(MAKE) $(MFLAGS) clean
+	-cd doc/misc      && $(MAKE) $(MFLAGS) clean
+	-cd doc/lispref   && $(MAKE) $(MFLAGS) clean
+	-cd doc/lispintro && $(MAKE) $(MFLAGS) clean
+	cd leim     && $(MAKE) $(MFLAGS) clean
+	cd nextstep && $(MAKE) $(MFLAGS) clean
 
 ### `bootclean'
 ###      Delete all files that need to be remade for a clean bootstrap.
@@ -846,38 +847,44 @@ top_distclean=\
 	${top_bootclean}; \
 	rm -f config.status config.log~ Makefile stamp-h1 ${SUBDIR_MAKEFILES}
 distclean: FRC
-	(cd src;      $(MAKE) $(MFLAGS) distclean)
-	(cd oldXMenu; $(MAKE) $(MFLAGS) distclean)
-	(cd lwlib;    $(MAKE) $(MFLAGS) distclean)
-	(cd lib;      $(MAKE) $(MFLAGS) distclean)
-	(cd lib-src;  $(MAKE) $(MFLAGS) distclean)
-	(cd nt;       $(MAKE) $(MFLAGS) distclean)
-	(cd doc/emacs &&    $(MAKE) $(MFLAGS) distclean)
-	(cd doc/misc &&    $(MAKE) $(MFLAGS) distclean)
-	(cd doc/lispref &&    $(MAKE) $(MFLAGS) distclean)
-	(cd doc/lispintro &&    $(MAKE) $(MFLAGS) distclean)
-	(cd leim;     $(MAKE) $(MFLAGS) distclean)
-	(cd lisp;     $(MAKE) $(MFLAGS) distclean)
-	(cd nextstep && $(MAKE) $(MFLAGS) distclean)
+	cd src      && $(MAKE) $(MFLAGS) distclean
+	cd oldXMenu && $(MAKE) $(MFLAGS) distclean
+	cd lwlib    && $(MAKE) $(MFLAGS) distclean
+	cd lib      && $(MAKE) $(MFLAGS) distclean
+	cd lib-src  && $(MAKE) $(MFLAGS) distclean
+	cd nt       && $(MAKE) $(MFLAGS) distclean
+	cd doc/emacs     && $(MAKE) $(MFLAGS) distclean
+	cd doc/misc      && $(MAKE) $(MFLAGS) distclean
+	cd doc/lispref   && $(MAKE) $(MFLAGS) distclean
+	cd doc/lispintro && $(MAKE) $(MFLAGS) distclean
+	cd leim     && $(MAKE) $(MFLAGS) distclean
+	cd lisp     && $(MAKE) $(MFLAGS) distclean
+	cd nextstep && $(MAKE) $(MFLAGS) distclean
+	[ ! -d test/automated ] || { \
+	  cd test/automated && $(MAKE) $(MFLAGS) distclean; \
+	}
 	${top_distclean}
 
 ### `bootstrap-clean'
 ###      Delete everything that can be reconstructed by `make' and that
 ###      needs to be deleted in order to force a bootstrap from a clean state.
 bootstrap-clean: FRC
-	(cd src;      $(MAKE) $(MFLAGS) bootstrap-clean)
-	(cd oldXMenu; $(MAKE) $(MFLAGS) maintainer-clean)
-	(cd lwlib;    $(MAKE) $(MFLAGS) maintainer-clean)
-	(cd lib;      $(MAKE) $(MFLAGS) maintainer-clean)
-	(cd lib-src;  $(MAKE) $(MFLAGS) maintainer-clean)
-	(cd nt;       $(MAKE) $(MFLAGS) maintainer-clean)
-	-(cd doc/emacs &&   $(MAKE) $(MFLAGS) maintainer-clean)
-	-(cd doc/misc &&   $(MAKE) $(MFLAGS) maintainer-clean)
-	-(cd doc/lispref &&   $(MAKE) $(MFLAGS) maintainer-clean)
-	-(cd doc/lispintro &&   $(MAKE) $(MFLAGS) maintainer-clean)
-	(cd leim;     $(MAKE) $(MFLAGS) maintainer-clean)
-	(cd lisp;     $(MAKE) $(MFLAGS) bootstrap-clean)
-	(cd nextstep && $(MAKE) $(MFLAGS) maintainer-clean)
+	cd src      && $(MAKE) $(MFLAGS) bootstrap-clean
+	cd oldXMenu && $(MAKE) $(MFLAGS) maintainer-clean
+	cd lwlib    && $(MAKE) $(MFLAGS) maintainer-clean
+	cd lib      && $(MAKE) $(MFLAGS) maintainer-clean
+	cd lib-src  && $(MAKE) $(MFLAGS) maintainer-clean
+	cd nt       && $(MAKE) $(MFLAGS) maintainer-clean
+	-cd doc/emacs     && $(MAKE) $(MFLAGS) maintainer-clean
+	-cd doc/misc      && $(MAKE) $(MFLAGS) maintainer-clean
+	-cd doc/lispref   && $(MAKE) $(MFLAGS) maintainer-clean
+	-cd doc/lispintro && $(MAKE) $(MFLAGS) maintainer-clean
+	cd leim     && $(MAKE) $(MFLAGS) maintainer-clean
+	cd lisp     && $(MAKE) $(MFLAGS) bootstrap-clean
+	cd nextstep && $(MAKE) $(MFLAGS) maintainer-clean
+	[ ! -d test/automated ] || { \
+	  cd test/automated && $(MAKE) $(MFLAGS) bootstrap-clean; \
+	}
 	[ ! -f config.log ] || mv -f config.log config.log~
 	${top_bootclean}
 
@@ -896,8 +903,11 @@ top_maintainer_clean=\
 	${top_distclean}; \
 	rm -fr autom4te.cache
 maintainer-clean: bootstrap-clean FRC
-	(cd src;      $(MAKE) $(MFLAGS) maintainer-clean)
-	(cd lisp;     $(MAKE) $(MFLAGS) maintainer-clean)
+	cd src  && $(MAKE) $(MFLAGS) maintainer-clean
+	cd lisp && $(MAKE) $(MFLAGS) maintainer-clean
+	[ ! -d test/automated ] || { \
+	  cd test/automated && $(MAKE) $(MFLAGS) maintainer-clean; \
+	}
 	${top_maintainer_clean}
 
 ### This doesn't actually appear in the coding standards, but Karl
@@ -1017,13 +1027,15 @@ info: force-info
 	fi
 
 # The info/dir file must be updated by hand when new manuals are added.
+# Cannot add an info/dir entry for efaq-w32 since it is not installed
+# on all platforms.
 check-info-dir: info
 	cd info ; \
 	missing= ; \
 	for file in *; do \
 	  test -f "$${file}" || continue ; \
 	  case $${file} in \
-	    *-[0-9]*|COPYING|dir) continue ;; \
+	    *-[0-9]*|COPYING|dir|efaq-w32*) continue ;; \
 	  esac ; \
 	  file=`echo $${file} | sed 's/\.info//'` ; \
 	  grep -q -F ": ($${file})." dir || missing="$${missing} $${file}" ; \
@@ -1058,5 +1070,5 @@ check-declare:
 	  echo "You must build Emacs to use this command"; \
 	  exit 1; \
 	fi
-	(cd leim; $(MAKE) $(MFLAGS) $@)
-	(cd lisp; $(MAKE) $(MFLAGS) $@)
+	cd leim && $(MAKE) $(MFLAGS) $@
+	cd lisp && $(MAKE) $(MFLAGS) $@

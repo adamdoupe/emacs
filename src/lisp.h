@@ -866,11 +866,7 @@ make_lisp_proc (struct Lisp_Process *p)
 #define XSETSTRING(a, b) ((a) = make_lisp_ptr (b, Lisp_String))
 #define XSETSYMBOL(a, b) ((a) = make_lisp_ptr (b, Lisp_Symbol))
 #define XSETFLOAT(a, b) ((a) = make_lisp_ptr (b, Lisp_Float))
-
-/* Misc types.  */
-
 #define XSETMISC(a, b) ((a) = make_lisp_ptr (b, Lisp_Misc))
-#define XSETMARKER(a, b) (XSETMISC (a, b), XMISCTYPE (a) = Lisp_Misc_Marker)
 
 /* Pseudovector types.  */
 
@@ -2164,38 +2160,6 @@ enum char_bits
     CHARACTERBITS = 22
   };
 
-/* Structure to hold mouse highlight data.  This is here because other
-   header files need it for defining struct x_output etc.  */
-typedef struct {
-  /* These variables describe the range of text currently shown in its
-     mouse-face, together with the window they apply to.  As long as
-     the mouse stays within this range, we need not redraw anything on
-     its account.  Rows and columns are glyph matrix positions in
-     MOUSE_FACE_WINDOW.  */
-  int mouse_face_beg_row, mouse_face_beg_col;
-  int mouse_face_beg_x, mouse_face_beg_y;
-  int mouse_face_end_row, mouse_face_end_col;
-  int mouse_face_end_x, mouse_face_end_y;
-  Lisp_Object mouse_face_window;
-  int mouse_face_face_id;
-  Lisp_Object mouse_face_overlay;
-
-  /* FRAME and X, Y position of mouse when last checked for
-     highlighting.  X and Y can be negative or out of range for the frame.  */
-  struct frame *mouse_face_mouse_frame;
-  int mouse_face_mouse_x, mouse_face_mouse_y;
-
-  /* Nonzero if part of the text currently shown in
-     its mouse-face is beyond the window end.  */
-  unsigned mouse_face_past_end : 1;
-
-  /* Nonzero means defer mouse-motion highlighting.  */
-  unsigned mouse_face_defer : 1;
-
-  /* Nonzero means that the mouse highlight should not be shown.  */
-  unsigned mouse_face_hidden : 1;
-} Mouse_HLInfo;
-
 /* Data type checking.  */
 
 LISP_MACRO_DEFUN (NILP, bool, (Lisp_Object x), (x))
@@ -2665,19 +2629,6 @@ typedef jmp_buf sys_jmp_buf;
 /* The special binding stack holds the outer values of variables while
    they are bound by a function application or a let form, stores the
    code to be executed for unwind-protect forms.
-
-   If func is non-zero, undoing this binding applies func to old_value;
-      This implements record_unwind_protect.
-
-   Otherwise, the element is a variable binding.
-
-   If the symbol field is a symbol, it is an ordinary variable binding.
-
-   Otherwise, it should be a structure (SYMBOL WHERE . CURRENT-BUFFER),
-   which means having bound a local value while CURRENT-BUFFER was active.
-   If WHERE is nil this means we saw the default value when binding SYMBOL.
-   WHERE being a buffer or frame means we saw a buffer-local or frame-local
-   value.  Other values of WHERE mean an internal error.
 
    NOTE: The specbinding union is defined here, because SPECPDL_INDEX is
    used all over the place, needs to be fast, and needs to know the size of
@@ -3512,7 +3463,7 @@ build_unibyte_string (const char *str)
 }
 
 extern Lisp_Object make_multibyte_string (const char *, ptrdiff_t, ptrdiff_t);
-extern Lisp_Object make_event_array (int, Lisp_Object *);
+extern Lisp_Object make_event_array (ptrdiff_t, Lisp_Object *);
 extern Lisp_Object make_uninit_string (EMACS_INT);
 extern Lisp_Object make_uninit_multibyte_string (EMACS_INT, EMACS_INT);
 extern Lisp_Object make_string_from_bytes (const char *, ptrdiff_t, ptrdiff_t);
@@ -3866,8 +3817,8 @@ extern ptrdiff_t fast_looking_at (Lisp_Object, ptrdiff_t, ptrdiff_t,
                                   ptrdiff_t, ptrdiff_t, Lisp_Object);
 extern ptrdiff_t find_newline (ptrdiff_t, ptrdiff_t, ptrdiff_t, ptrdiff_t,
 			       ptrdiff_t, ptrdiff_t *, ptrdiff_t *, bool);
-extern EMACS_INT scan_newline (ptrdiff_t, ptrdiff_t, ptrdiff_t, ptrdiff_t,
-			       EMACS_INT, bool);
+extern ptrdiff_t scan_newline (ptrdiff_t, ptrdiff_t, ptrdiff_t, ptrdiff_t,
+			       ptrdiff_t, bool);
 extern ptrdiff_t find_newline_no_quit (ptrdiff_t, ptrdiff_t,
 				       ptrdiff_t, ptrdiff_t *);
 extern ptrdiff_t find_before_next_newline (ptrdiff_t, ptrdiff_t,
@@ -4100,7 +4051,6 @@ extern void init_sys_modes (struct tty_display_info *);
 extern void reset_sys_modes (struct tty_display_info *);
 extern void init_all_sys_modes (void);
 extern void reset_all_sys_modes (void);
-extern void flush_pending_output (int) ATTRIBUTE_CONST;
 extern void child_setup_tty (int);
 extern void setup_pty (int);
 extern int set_window_size (int, int, int);

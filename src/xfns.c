@@ -22,10 +22,6 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include <math.h>
 #include <unistd.h>
 
-/* This makes the fields of a Display accessible, in Xlib header files.  */
-
-#define XLIB_ILLEGAL_ACCESS
-
 #include "lisp.h"
 #include "xterm.h"
 #include "frame.h"
@@ -1186,7 +1182,7 @@ x_set_menu_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
 
 	  block_input ();
 	  x_clear_area (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f),
-			0, y, width, height, False);
+			0, y, width, height);
 	  unblock_input ();
 	}
 
@@ -1197,7 +1193,7 @@ x_set_menu_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
 
 	  block_input ();
 	  x_clear_area (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f),
-			0, y, width, height, False);
+			0, y, width, height);
 	  unblock_input ();
 	}
 
@@ -1295,8 +1291,8 @@ x_set_tool_bar_lines (struct frame *f, Lisp_Object value, Lisp_Object oldval)
       if (height > 0 && width > 0)
 	{
           block_input ();
-          x_clear_area (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f),
-                        0, y, width, height, False);
+	  x_clear_area (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f),
+			0, y, width, height);
           unblock_input ();
         }
 

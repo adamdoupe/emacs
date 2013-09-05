@@ -24,46 +24,18 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #define EMACS_FRAME_H
 
 #include "dispextern.h"
+#include "termhooks.h"
 
 INLINE_HEADER_BEGIN
 #ifndef FRAME_INLINE
 # define FRAME_INLINE INLINE
 #endif
 
-
-/* Miscellanea.  */
-
-/* Nonzero means there is at least one garbaged frame.  */
-extern bool frame_garbaged;
-
-
-/* The structure representing a frame.  */
-
-enum output_method
-{
-  output_initial,
-  output_termcap,
-  output_x_window,
-  output_msdos_raw,
-  output_w32,
-  output_ns
-};
-
 enum vertical_scroll_bar_type
 {
   vertical_scroll_bar_none,
   vertical_scroll_bar_left,
   vertical_scroll_bar_right
-};
-
-enum text_cursor_kinds
-{
-  DEFAULT_CURSOR = -2,
-  NO_CURSOR = -1,
-  FILLED_BOX_CURSOR,
-  HOLLOW_BOX_CURSOR,
-  BAR_CURSOR,
-  HBAR_CURSOR
 };
 
 enum fullscreen_type
@@ -76,10 +48,7 @@ enum fullscreen_type
   FULLSCREEN_WAIT      = 0x100
 };
 
-
-#define FRAME_FOREGROUND_PIXEL(f) ((f)->foreground_pixel)
-#define FRAME_BACKGROUND_PIXEL(f) ((f)->background_pixel)
-
+/* The structure representing a frame.  */
 
 struct frame
 {
@@ -894,6 +863,9 @@ default_pixels_per_inch_y (void)
 #define FRAME_CURSOR_WIDTH(f) ((f)->cursor_width)
 #define FRAME_BLINK_OFF_CURSOR_WIDTH(f) ((f)->blink_off_cursor_width)
 
+#define FRAME_FOREGROUND_PIXEL(f) ((f)->foreground_pixel)
+#define FRAME_BACKGROUND_PIXEL(f) ((f)->background_pixel)
+
 /* Return a pointer to the face cache of frame F.  */
 
 #define FRAME_FACE_CACHE(F)	(F)->face_cache
@@ -959,6 +931,9 @@ extern Lisp_Object Qtty, Qtty_type;
 extern Lisp_Object Qtty_color_mode;
 extern Lisp_Object Qterminal;
 extern Lisp_Object Qnoelisp;
+
+/* Nonzero means there is at least one garbaged frame.  */
+extern bool frame_garbaged;
 
 extern struct frame *last_nonminibuf_frame;
 

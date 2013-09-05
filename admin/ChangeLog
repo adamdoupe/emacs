@@ -1,3 +1,13 @@
+2013-08-28  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* unidata/Makefile.in (SHELL): Now @SHELL@, not /bin/sh,
+	for portability to hosts where /bin/sh has problems.
+
+2013-08-27  Glenn Morris  <rgm@gnu.org>
+
+	* admin.el (manual-misc-manuals): Use INFO_COMMON rather than
+	INFO_TARGETS.  "faq" does not need special treatment any more.
+
 2013-08-15  Glenn Morris  <rgm@gnu.org>
 
 	* make-tarball.txt: Mention generating pdfs in etc/refcards.

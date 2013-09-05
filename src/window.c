@@ -39,18 +39,11 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "blockinput.h"
 #include "intervals.h"
 #include "termhooks.h"		/* For FRAME_TERMINAL.  */
-
-#ifdef HAVE_X_WINDOWS
-#include "xterm.h"
-#endif	/* HAVE_X_WINDOWS */
-#ifdef HAVE_NTGUI
-#include "w32term.h"
-#endif
+#ifdef HAVE_WINDOW_SYSTEM
+#include TERM_HEADER
+#endif /* HAVE_WINDOW_SYSTEM */
 #ifdef MSDOS
 #include "msdos.h"
-#endif
-#ifdef HAVE_NS
-#include "nsterm.h"
 #endif
 
 Lisp_Object Qwindowp, Qwindow_live_p;
@@ -549,15 +542,7 @@ select_window_1 (Lisp_Object window, bool inhibit_point_swap)
      than one window.  It also matters when
      redisplay_window has altered point after scrolling,
      because it makes the change only in the window.  */
-  {
-    register ptrdiff_t new_point = marker_position (XWINDOW (window)->pointm);
-    if (new_point < BEGV)
-      SET_PT (BEGV);
-    else if (new_point > ZV)
-      SET_PT (ZV);
-    else
-      SET_PT (new_point);
-  }
+  set_point_from_marker (XWINDOW (window)->pointm);
 }
 
 DEFUN ("select-window", Fselect_window, Sselect_window, 1, 2, 0,
@@ -1502,7 +1487,6 @@ if it isn't already recorded.  */)
       && !noninteractive)
     {
       struct text_pos startp;
-      ptrdiff_t charpos = marker_position (w->start);
       struct it it;
       struct buffer *old_buffer = NULL;
       void *itdata = NULL;
@@ -1520,12 +1504,7 @@ if it isn't already recorded.  */)
          `-l' containing a call to `rmail' with subsequent other
          commands.  At the end, W->start happened to be BEG, while
          rmail had already narrowed the buffer.  */
-      if (charpos < BEGV)
-	SET_TEXT_POS (startp, BEGV, BEGV_BYTE);
-      else if (charpos > ZV)
-	SET_TEXT_POS (startp, ZV, ZV_BYTE);
-      else
-	SET_TEXT_POS_FROM_MARKER (startp, w->start);
+      CLIP_TEXT_POS_FROM_MARKER (startp, w->start);
 
       itdata = bidi_shelve_cache ();
       start_display (&it, w, startp);
@@ -2027,8 +2006,8 @@ replace_window (Lisp_Object old, Lisp_Object new, int setflag)
       n->desired_matrix = n->current_matrix = 0;
       n->vscroll = 0;
       memset (&n->cursor, 0, sizeof (n->cursor));
-      memset (&n->last_cursor, 0, sizeof (n->last_cursor));
       memset (&n->phys_cursor, 0, sizeof (n->phys_cursor));
+      n->last_cursor_vpos = 0;
       n->phys_cursor_type = -1;
       n->phys_cursor_width = -1;
       n->must_be_updated_p = 0;
@@ -2842,7 +2821,7 @@ window-start value is reasonable when this function is called.  */)
   block_input ();
   if (!FRAME_INITIAL_P (f))
     {
-        Mouse_HLInfo *hlinfo = MOUSE_HL_INFO (f);
+      Mouse_HLInfo *hlinfo = MOUSE_HL_INFO (f);
 
       /* We are going to free the glyph matrices of WINDOW, and with
 	 that we might lose any information about glyph rows that have
@@ -2852,11 +2831,7 @@ window-start value is reasonable when this function is called.  */)
 	 frame's up-to-date hook that mouse highlight was overwritten,
 	 so that it will arrange for redisplaying the highlight.  */
       if (EQ (hlinfo->mouse_face_window, window))
-	{
-	  hlinfo->mouse_face_beg_row = hlinfo->mouse_face_beg_col = -1;
-	  hlinfo->mouse_face_end_row = hlinfo->mouse_face_end_col = -1;
-	  hlinfo->mouse_face_window = Qnil;
-	}
+	reset_mouse_highlight (hlinfo);
     }
   free_window_matrices (r);
 
@@ -3172,7 +3147,7 @@ set_window_buffer (Lisp_Object window, Lisp_Object buffer,
 
   w->window_end_pos = 0;
   w->window_end_vpos = 0;
-  memset (&w->last_cursor, 0, sizeof w->last_cursor);
+  w->last_cursor_vpos = 0;
 
   if (!(keep_margins_p && samebuf))
     { /* If we're not actually changing the buffer, don't reset hscroll and
@@ -3353,10 +3328,8 @@ temp_output_buffer_show (register Lisp_Object buf)
 
   if (!NILP (Vtemp_buffer_show_function))
     call1 (Vtemp_buffer_show_function, buf);
-  else
+  else if (WINDOW_LIVE_P (window = display_buffer (buf, Qnil, Qnil)))
     {
-      window = display_buffer (buf, Qnil, Qnil);
-
       if (!EQ (XWINDOW (window)->frame, selected_frame))
 	Fmake_frame_visible (WINDOW_FRAME (XWINDOW (window)));
       Vminibuf_scroll_window = window;
@@ -3446,6 +3419,7 @@ make_window (void)
      non-Lisp data, so do it only for slots which should not be zero.  */
   w->nrows_scale_factor = w->ncols_scale_factor = 1;
   w->left_fringe_width = w->right_fringe_width = -1;
+  w->mode_line_height = w->header_line_height = -1;
   w->phys_cursor_type = -1;
   w->phys_cursor_width = -1;
   w->scroll_bar_width = -1;
@@ -3911,7 +3885,7 @@ set correctly.  See the code of `split-window' for how this is done.  */)
     }
 
   n->window_end_valid = 0;
-  memset (&n->last_cursor, 0, sizeof n->last_cursor);
+  n->last_cursor_vpos = 0;
 
   /* Get special geometry settings from reference window.  */
   n->left_margin_cols = r->left_margin_cols;
@@ -5052,7 +5026,6 @@ displayed_window_lines (struct window *w)
 {
   struct it it;
   struct text_pos start;
-  ptrdiff_t charpos = marker_position (w->start);
   int height = window_box_height (w);
   struct buffer *old_buffer;
   int bottom_y;
@@ -5069,12 +5042,7 @@ displayed_window_lines (struct window *w)
   /* In case W->start is out of the accessible range, do something
      reasonable.  This happens in Info mode when Info-scroll-down
      calls (recenter -1) while W->start is 1.  */
-  if (charpos < BEGV)
-    SET_TEXT_POS (start, BEGV, BEGV_BYTE);
-  else if (charpos > ZV)
-    SET_TEXT_POS (start, ZV, ZV_BYTE);
-  else
-    SET_TEXT_POS_FROM_MARKER (start, w->start);
+  CLIP_TEXT_POS_FROM_MARKER (start, w->start);
 
   itdata = bidi_shelve_cache ();
   start_display (&it, w, start);
@@ -5408,7 +5376,7 @@ struct save_window_data
     Lisp_Object saved_windows;
 
     /* All fields above are traced by the GC.
-       From `fame-cols' down, the fields are ignored by the GC.  */
+       From `frame-cols' down, the fields are ignored by the GC.  */
 
     int frame_cols, frame_lines, frame_menu_bar_lines;
     int frame_tool_bar_lines;

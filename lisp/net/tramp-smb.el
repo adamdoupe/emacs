@@ -1364,14 +1364,14 @@ Result is a list of (LOCALNAME MODE SIZE MONTH DAY TIME YEAR)."
 	      (while (not (eobp))
 		(setq entry (tramp-smb-read-file-entry share))
 		(forward-line)
-		(when entry (add-to-list 'res entry))))
+		(when entry (pushnew entry res :test #'equal))))
 
 	    ;; Cache share entries.
 	    (unless share
 	      (tramp-set-connection-property v "share-cache" res)))
 
 	  ;; Add directory itself.
-	  (add-to-list 'res '("" "drwxrwxrwx" 0 (0 0)))
+	  (pushnew '("" "drwxrwxrwx" 0 (0 0)) res :test #'equal)
 
 	  ;; There's a very strange error (debugged with XEmacs 21.4.14)
 	  ;; If there's no short delay, it returns nil.  No idea about.
@@ -1564,6 +1564,8 @@ Does not do anything if a connection is already open, but re-opens the
 connection if a previous connection has died for some reason.
 If ARGUMENT is non-nil, use it as argument for
 `tramp-smb-winexe-program', and suppress any checks."
+  (tramp-check-proper-host vec)
+
   (let* ((share (tramp-smb-get-share vec))
 	 (buf (tramp-get-connection-buffer vec))
 	 (p (get-buffer-process buf)))

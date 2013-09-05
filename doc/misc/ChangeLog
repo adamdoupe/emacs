@@ -1,3 +1,38 @@
+2013-08-28  Paul Eggert  <eggert@cs.ucla.edu>
+
+	* Makefile.in (SHELL): Now @SHELL@, not /bin/sh,
+	for portability to hosts where /bin/sh has problems.
+
+2013-08-28  Stefan Monnier  <monnier@iro.umontreal.ca>
+
+	Try to reduce redundancy in doc/misc/Makefile.in.
+	* Makefile.in (DOCMISC_W32): New var to replace DOCMISC_*_W32.
+	(TARGETS): New intermediate variable.
+	(DVI_TARGETS, HTML_TARGETS, PDF_TARGETS, PS_TARGETS): Use it.
+
+2013-08-27  Glenn Morris  <rgm@gnu.org>
+
+	* efaq.texi (Emacs for MS-Windows): Update location of MS FAQ.
+
+	* efaq.texi: Rename from faq.texi, to match its output files.
+	* Makefile.in: Update for faq.texi name change.
+
+	* efaq-w32.texi (EMACSVER): Get it from emacsver.texi.
+
+	* Makefile.in (webhack): Remove; it's nothing to do with Emacs.
+
+	* efaq-w32.texi: Move here from the web-pages repository.
+	* Makefile.in (DOCMISC_DVI_W32, DOCMISC_HTML_W32, DOCMISC_INFO_W32)
+	(DOCMISC_PDF_W32, DOCMISC_PS_W32): New configure output variables.
+	(INFO_COMMON, INFO_INSTALL): New derivations of INFO_TARGETS.
+	(DVI_TARGETS, HTML_TARGETS, PDF_TARGETS, PS_TARGETS):
+	Add DOCMISC_*_W32 variables.
+	(echo-info): Use INFO_INSTALL rather than INFO_TARGETS.
+	(efaq_w32_deps): New variable.
+	(efaq-w32, $(buildinfodir)/efaq-w32$(INFO_EXT), efaq-w32.dvi)
+	(efaq-w32.pdf, efaq-w32.html): New rules.
+	(clean): Remove efaq-w32 products.
+
 2013-08-19  Katsumi Yamaoka  <yamaoka@jpl.org>
 
 	* emacs-mime.texi (Encoding Customization): Exclude iso-2022-jp-2 and

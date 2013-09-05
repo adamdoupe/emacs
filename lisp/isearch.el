@@ -2249,7 +2249,9 @@ the bottom."
 Return the key sequence as a string/vector."
   (isearch-unread-key-sequence keylist)
   (let (overriding-terminal-local-map)
-    (read-key-sequence nil)))  ; This will go through function-key-map, if nec.
+    ;; This will go through function-key-map, if nec.
+    ;; The arg DONT-DOWNCASE-LAST prevents premature shift-translation.
+    (read-key-sequence nil nil t)))
 
 (defun isearch-lookup-scroll-key (key-seq)
   "If KEY-SEQ is bound to a scrolling command, return it as a symbol.
@@ -2307,6 +2309,16 @@ Isearch mode."
 		    (lookup-key local-function-key-map key)))
 	     (while keylist
 	       (setq key (car keylist))
+	       ;; Handle an undefined shifted printing character
+	       ;; by downshifting it if that makes it printing.
+	       ;; (As read-key-sequence would normally do,
+	       ;; if we didn't have a default definition.)
+	       (if (and (integerp key)
+			(memq 'shift (event-modifiers key))
+			(>= key (+ ?\s (- ?\S-a ?a)))
+			(/= key (+ 127 (- ?\S-a ?a)))
+			(<  key (+ 256 (- ?\S-a ?a))))
+		   (setq key (- key (- ?\S-a ?a))))
 	       ;; If KEY is a printing char, we handle it here
 	       ;; directly to avoid the input method and keyboard
 	       ;; coding system translating it.
@@ -2386,6 +2398,13 @@ Isearch mode."
              (isearch-unread-key-sequence keylist)
              (setq main-event (car unread-command-events))
 
+	     ;; Don't store special commands in the keyboard macro.
+	     (let (overriding-terminal-local-map)
+	       (when (memq (key-binding key)
+			   '(kmacro-start-macro
+			     kmacro-end-macro kmacro-end-and-call-macro))
+		 (cancel-kbd-macro-events)))
+
 	     ;; If we got a mouse click event, that event contains the
 	     ;; window clicked on. maybe it was read with the buffer
 	     ;; it was clicked on.  If so, that buffer, not the current one,
@@ -2430,10 +2449,14 @@ With argument, add COUNT copies of the character."
 	(if (subregexp-context-p isearch-string (length isearch-string))
 	    (isearch-process-search-string "[ ]" " ")
 	  (isearch-process-search-char char count))
-      (and enable-multibyte-characters
-	   (>= char ?\200)
-	   (<= char ?\377)
-	   (setq char (unibyte-char-to-multibyte char)))
+      ;; This used to assume character codes 0240 - 0377 stand for
+      ;; characters in some single-byte character set, and converted them
+      ;; to Emacs characters.  But in 23.1 this feature is deprecated
+      ;; in favor of inserting the corresponding Unicode characters.
+      ;; (and enable-multibyte-characters
+      ;;      (>= char ?\200)
+      ;;      (<= char ?\377)
+      ;;      (setq char (unibyte-char-to-multibyte char)))
       (isearch-process-search-char char count))))
 
 (defun isearch-printing-char (&optional char count)
@@ -2773,10 +2796,18 @@ update the match data, and return point."
 
     (invalid-regexp
      (setq isearch-error (car (cdr lossage)))
-     (if (string-match
-	  "\\`Premature \\|\\`Unmatched \\|\\`Invalid "
-	  isearch-error)
-	 (setq isearch-error "incomplete input")))
+     (cond
+      ((string-match
+	"\\`Premature \\|\\`Unmatched \\|\\`Invalid "
+	isearch-error)
+       (setq isearch-error "incomplete input"))
+      ((and (not isearch-regexp)
+	    (string-match "\\`Regular expression too big" isearch-error))
+       (cond
+	(isearch-word
+	 (setq isearch-error "Too many words"))
+	((and isearch-lax-whitespace search-whitespace-regexp)
+	 (setq isearch-error "Too many spaces for whitespace matching"))))))
 
     (search-failed
      (setq isearch-success nil)

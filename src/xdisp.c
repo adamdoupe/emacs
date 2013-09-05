@@ -299,19 +299,9 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "font.h"
 #include "fontset.h"
 #include "blockinput.h"
-
-#ifdef HAVE_X_WINDOWS
-#include "xterm.h"
-#endif
-#ifdef HAVE_NTGUI
-#include "w32term.h"
-#endif
-#ifdef HAVE_NS
-#include "nsterm.h"
-#endif
-#ifdef USE_GTK
-#include "gtkutil.h"
-#endif
+#ifdef HAVE_WINDOW_SYSTEM
+#include TERM_HEADER
+#endif /* HAVE_WINDOW_SYSTEM */
 
 #ifndef FRAME_X_OUTPUT
 #define FRAME_X_OUTPUT(f) ((f)->output_data.x)
@@ -583,12 +573,6 @@ static int last_height;
 
 int help_echo_showing_p;
 
-/* If >= 0, computed, exact values of mode-line and header-line height
-   to use in the macros CURRENT_MODE_LINE_HEIGHT and
-   CURRENT_HEADER_LINE_HEIGHT.  */
-
-int current_mode_line_height, current_header_line_height;
-
 /* The maximum distance to look ahead for text properties.  Values
    that are too small let us call compute_char_face and similar
    functions too often which is expensive.  Values that are too large
@@ -760,12 +744,16 @@ Lisp_Object previous_help_echo_string;
 
 /* Platform-independent portion of hourglass implementation. */
 
+#ifdef HAVE_WINDOW_SYSTEM
+
 /* Non-zero means an hourglass cursor is currently shown.  */
 int hourglass_shown_p;
 
 /* If non-null, an asynchronous timer that, when it expires, displays
    an hourglass cursor on all frames.  */
 struct atimer *hourglass_atimer;
+
+#endif /* HAVE_WINDOW_SYSTEM */
 
 /* Name of the face used to display glyphless characters.  */
 Lisp_Object Qglyphless_char;
@@ -776,14 +764,17 @@ static Lisp_Object Qglyphless_char_display;
 /* Method symbols for Vglyphless_char_display.  */
 static Lisp_Object Qhex_code, Qempty_box, Qthin_space, Qzero_width;
 
-/* Default pixel width of `thin-space' display method.  */
-#define THIN_SPACE_WIDTH 1
-
 /* Default number of seconds to wait before displaying an hourglass
    cursor.  */
 #define DEFAULT_HOURGLASS_DELAY 1
 
-
+#ifdef HAVE_WINDOW_SYSTEM
+
+/* Default pixel width of `thin-space' display method.  */
+#define THIN_SPACE_WIDTH 1
+
+#endif /* HAVE_WINDOW_SYSTEM */
+
 /* Function prototypes.  */
 
 static void setup_for_ellipsis (struct it *, int);
@@ -966,12 +957,12 @@ window_text_bottom_y (struct window *w)
   return height;
 }
 
-/* Return the pixel width of display area AREA of window W.  AREA < 0
-   means return the total width of W, not including fringes to
-   the left and right of the window.  */
+/* Return the pixel width of display area AREA of window W.
+   ANY_AREA means return the total width of W, not including
+   fringes to the left and right of the window.  */
 
 int
-window_box_width (struct window *w, int area)
+window_box_width (struct window *w, enum glyph_row_area area)
 {
   int cols = w->total_cols;
   int pixels = 0;
@@ -1049,11 +1040,11 @@ window_box_height (struct window *w)
 }
 
 /* Return the window-relative coordinate of the left edge of display
-   area AREA of window W.  AREA < 0 means return the left edge of the
+   area AREA of window W.  ANY_AREA means return the left edge of the
    whole window, to the right of the left fringe of W.  */
 
 int
-window_box_left_offset (struct window *w, int area)
+window_box_left_offset (struct window *w, enum glyph_row_area area)
 {
   int x;
 
@@ -1081,21 +1072,21 @@ window_box_left_offset (struct window *w, int area)
 
 
 /* Return the window-relative coordinate of the right edge of display
-   area AREA of window W.  AREA < 0 means return the right edge of the
+   area AREA of window W.  ANY_AREA means return the right edge of the
    whole window, to the left of the right fringe of W.  */
 
 int
-window_box_right_offset (struct window *w, int area)
+window_box_right_offset (struct window *w, enum glyph_row_area area)
 {
   return window_box_left_offset (w, area) + window_box_width (w, area);
 }
 
 /* Return the frame-relative coordinate of the left edge of display
-   area AREA of window W.  AREA < 0 means return the left edge of the
+   area AREA of window W.  ANY_AREA means return the left edge of the
    whole window, to the right of the left fringe of W.  */
 
 int
-window_box_left (struct window *w, int area)
+window_box_left (struct window *w, enum glyph_row_area area)
 {
   struct frame *f = XFRAME (w->frame);
   int x;
@@ -1111,25 +1102,25 @@ window_box_left (struct window *w, int area)
 
 
 /* Return the frame-relative coordinate of the right edge of display
-   area AREA of window W.  AREA < 0 means return the right edge of the
+   area AREA of window W.  ANY_AREA means return the right edge of the
    whole window, to the left of the right fringe of W.  */
 
 int
-window_box_right (struct window *w, int area)
+window_box_right (struct window *w, enum glyph_row_area area)
 {
   return window_box_left (w, area) + window_box_width (w, area);
 }
 
 /* Get the bounding box of the display area AREA of window W, without
-   mode lines, in frame-relative coordinates.  AREA < 0 means the
+   mode lines, in frame-relative coordinates.  ANY_AREA means the
    whole window, not including the left and right fringes of
    the window.  Return in *BOX_X and *BOX_Y the frame-relative pixel
    coordinates of the upper-left corner of the box.  Return in
    *BOX_WIDTH, and *BOX_HEIGHT the pixel width and height of the box.  */
 
 void
-window_box (struct window *w, int area, int *box_x, int *box_y,
-	    int *box_width, int *box_height)
+window_box (struct window *w, enum glyph_row_area area, int *box_x,
+	    int *box_y, int *box_width, int *box_height)
 {
   if (box_width)
     *box_width = window_box_width (w, area);
@@ -1145,27 +1136,27 @@ window_box (struct window *w, int area, int *box_x, int *box_y,
     }
 }
 
+#ifdef HAVE_WINDOW_SYSTEM
 
 /* Get the bounding box of the display area AREA of window W, without
-   mode lines.  AREA < 0 means the whole window, not including the
-   left and right fringe of the window.  Return in *TOP_LEFT_X
+   mode lines and both fringes of the window.  Return in *TOP_LEFT_X
    and TOP_LEFT_Y the frame-relative pixel coordinates of the
    upper-left corner of the box.  Return in *BOTTOM_RIGHT_X, and
    *BOTTOM_RIGHT_Y the coordinates of the bottom-right corner of the
    box.  */
 
 static void
-window_box_edges (struct window *w, int area, int *top_left_x, int *top_left_y,
-		   int *bottom_right_x, int *bottom_right_y)
+window_box_edges (struct window *w, int *top_left_x, int *top_left_y,
+		  int *bottom_right_x, int *bottom_right_y)
 {
-  window_box (w, area, top_left_x, top_left_y, bottom_right_x,
-	      bottom_right_y);
+  window_box (w, ANY_AREA, top_left_x, top_left_y,
+	      bottom_right_x, bottom_right_y);
   *bottom_right_x += *top_left_x;
   *bottom_right_y += *top_left_y;
 }
 
+#endif /* HAVE_WINDOW_SYSTEM */
 
-
 /***********************************************************************
 			      Utilities
  ***********************************************************************/
@@ -1352,12 +1343,12 @@ pos_visible_p (struct window *w, ptrdiff_t charpos, int *x, int *y,
 
   /* Compute exact mode line heights.  */
   if (WINDOW_WANTS_MODELINE_P (w))
-    current_mode_line_height
+    w->mode_line_height
       = display_mode_line (w, CURRENT_MODE_LINE_FACE_ID (w),
 			   BVAR (current_buffer, mode_line_format));
 
   if (WINDOW_WANTS_HEADER_LINE_P (w))
-    current_header_line_height
+    w->header_line_height
       = display_mode_line (w, HEADER_LINE_FACE_ID,
 			   BVAR (current_buffer, header_line_format));
 
@@ -1649,8 +1640,6 @@ pos_visible_p (struct window *w, ptrdiff_t charpos, int *x, int *y,
 
   if (old_buffer)
     set_buffer_internal_1 (old_buffer);
-
-  current_header_line_height = current_mode_line_height = -1;
 
   if (visible_p && w->hscroll > 0)
     *x -=
@@ -3912,10 +3901,14 @@ handle_face_prop (struct it *it)
 	  /* For strings from a `display' property, use the face at
 	     IT's current buffer position as the base face to merge
 	     with, so that overlay strings appear in the same face as
-	     surrounding text, unless they specify their own
-	     faces.  */
+	     surrounding text, unless they specify their own faces.
+	     For strings from wrap-prefix and line-prefix properties,
+	     use the default face, possibly remapped via
+	     Vface_remapping_alist.  */
 	  base_face_id = it->string_from_prefix_prop_p
-	    ? DEFAULT_FACE_ID
+	    ? (!NILP (Vface_remapping_alist)
+	       ? lookup_basic_face (it->f, DEFAULT_FACE_ID)
+	       : DEFAULT_FACE_ID)
 	    : underlying_face_id (it);
 	}
 
@@ -7046,7 +7039,9 @@ get_next_display_element (struct it *it)
 		}
 	    }
 	}
-      else
+      /* next_element_from_display_vector sets this flag according to
+	 faces of the display vector glyphs, see there.  */
+      else if (it->method != GET_FROM_DISPLAY_VECTOR)
 	{
 	  int face_id = face_after_it_pos (it);
 	  it->end_of_box_run_p
@@ -11439,62 +11434,6 @@ update_menu_bar (struct frame *f, int save_match_data, int hooks_run)
   return hooks_run;
 }
 
-
-
-/***********************************************************************
-			    Output Cursor
- ***********************************************************************/
-
-#ifdef HAVE_WINDOW_SYSTEM
-
-/* EXPORT:
-   Nominal cursor position -- where to draw output.
-   HPOS and VPOS are window relative glyph matrix coordinates.
-   X and Y are window relative pixel coordinates.  */
-
-struct cursor_pos output_cursor;
-
-
-/* EXPORT:
-   Set the global variable output_cursor to CURSOR.  All cursor
-   positions are relative to currently updated window.  */
-
-void
-set_output_cursor (struct cursor_pos *cursor)
-{
-  output_cursor.hpos = cursor->hpos;
-  output_cursor.vpos = cursor->vpos;
-  output_cursor.x = cursor->x;
-  output_cursor.y = cursor->y;
-}
-
-
-/* EXPORT for RIF:
-   Set a nominal cursor position.
-
-   HPOS and VPOS are column/row positions in a window glyph matrix.
-   X and Y are window text area relative pixel positions.
-
-   This is always done during window update, so the position is the
-   future output cursor position for currently updated window W.
-   NOTE: W is used only to check whether this function is called
-   in a consistent manner via the redisplay interface.  */
-
-void
-x_cursor_to (struct window *w, int vpos, int hpos, int y, int x)
-{
-  eassert (w);
-
-  /* Set the output cursor.  */
-  output_cursor.hpos = hpos;
-  output_cursor.vpos = vpos;
-  output_cursor.x = x;
-  output_cursor.y = y;
-}
-
-#endif /* HAVE_WINDOW_SYSTEM */
-
-
 /***********************************************************************
 			       Tool-bars
  ***********************************************************************/
@@ -12378,13 +12317,11 @@ note_tool_bar_highlight (struct frame *f, int x, int y)
       hlinfo->mouse_face_beg_col = hpos;
       hlinfo->mouse_face_beg_row = vpos;
       hlinfo->mouse_face_beg_x = x;
-      hlinfo->mouse_face_beg_y = row->y;
       hlinfo->mouse_face_past_end = 0;
 
       hlinfo->mouse_face_end_col = hpos + 1;
       hlinfo->mouse_face_end_row = vpos;
       hlinfo->mouse_face_end_x = x + glyph->pixel_width;
-      hlinfo->mouse_face_end_y = row->y;
       hlinfo->mouse_face_window = window;
       hlinfo->mouse_face_face_id = TOOL_BAR_FACE_ID;
 
@@ -13737,7 +13674,7 @@ mark_window_display_accurate_1 (struct window *w, int accurate_p)
       w->current_matrix->begv = BUF_BEGV (b);
       w->current_matrix->zv = BUF_ZV (b);
 
-      w->last_cursor = w->cursor;
+      w->last_cursor_vpos = w->cursor.vpos;
       w->last_cursor_off_p = w->cursor_off_p;
 
       if (w == XWINDOW (selected_window))
@@ -15081,12 +15018,12 @@ try_cursor_movement (Lisp_Object window, struct text_pos startp, int *scroll_ste
 
       /* Start with the row the cursor was displayed during the last
 	 not paused redisplay.  Give up if that row is not valid.  */
-      if (w->last_cursor.vpos < 0
-	  || w->last_cursor.vpos >= w->current_matrix->nrows)
+      if (w->last_cursor_vpos < 0
+	  || w->last_cursor_vpos >= w->current_matrix->nrows)
 	rc = CURSOR_MOVEMENT_MUST_SCROLL;
       else
 	{
-	  row = MATRIX_ROW (w->current_matrix, w->last_cursor.vpos);
+	  row = MATRIX_ROW (w->current_matrix, w->last_cursor_vpos);
 	  if (row->mode_line_p)
 	    ++row;
 	  if (!row->enabled_p)
@@ -16162,6 +16099,7 @@ redisplay_window (Lisp_Object window, int just_this_one_p)
 	  && CURRENT_MODE_LINE_HEIGHT (w) != DESIRED_MODE_LINE_HEIGHT (w))
 	{
 	  fonts_changed_p = 1;
+	  w->mode_line_height = -1;
 	  MATRIX_MODE_LINE_ROW (w->current_matrix)->height
 	    = DESIRED_MODE_LINE_HEIGHT (w);
 	}
@@ -16172,6 +16110,7 @@ redisplay_window (Lisp_Object window, int just_this_one_p)
 	  && CURRENT_HEADER_LINE_HEIGHT (w) != DESIRED_HEADER_LINE_HEIGHT (w))
 	{
 	  fonts_changed_p = 1;
+	  w->header_line_height = -1;
 	  MATRIX_HEADER_LINE_ROW (w->current_matrix)->height
 	    = DESIRED_HEADER_LINE_HEIGHT (w);
 	}
@@ -20659,13 +20598,8 @@ redisplay_mode_lines (Lisp_Object window, int force)
 	    {
 	      struct text_pos pt;
 
-	      SET_TEXT_POS_FROM_MARKER (pt, w->pointm);
-	      if (CHARPOS (pt) < BEGV)
-		TEMP_SET_PT_BOTH (BEGV, BEGV_BYTE);
-	      else if (CHARPOS (pt) > (ZV - 1))
-		TEMP_SET_PT_BOTH (ZV, ZV_BYTE);
-	      else
-		TEMP_SET_PT_BOTH (CHARPOS (pt), BYTEPOS (pt));
+	      CLIP_TEXT_POS_FROM_MARKER (pt, w->pointm);
+	      TEMP_SET_PT_BOTH (CHARPOS (pt), BYTEPOS (pt));
 	    }
 
 	  /* Display mode lines.  */
@@ -25763,12 +25697,12 @@ x_produce_glyphs (struct it *it)
 
 /* EXPORT for RIF:
    Output LEN glyphs starting at START at the nominal cursor position.
-   Advance the nominal cursor over the text.  The global variable
-   updated_row is the glyph row being updated, and updated_area is the
-   area of that row being updated.  */
+   Advance the nominal cursor over the text.  UPDATED_ROW is the glyph row
+   being updated, and UPDATED_AREA is the area of that row being updated.  */
 
 void
-x_write_glyphs (struct window *w, struct glyph *start, int len)
+x_write_glyphs (struct window *w, struct glyph_row *updated_row,
+		struct glyph *start, enum glyph_row_area updated_area, int len)
 {
   int x, hpos, chpos = w->phys_cursor.hpos;
 
@@ -25786,7 +25720,7 @@ x_write_glyphs (struct window *w, struct glyph *start, int len)
   /* Write glyphs.  */
 
   hpos = start - updated_row->glyphs[updated_area];
-  x = draw_glyphs (w, output_cursor.x,
+  x = draw_glyphs (w, w->output_cursor.x,
 		   updated_row, updated_area,
 		   hpos, hpos + len,
 		   DRAW_NORMAL_TEXT, 0);
@@ -25794,7 +25728,7 @@ x_write_glyphs (struct window *w, struct glyph *start, int len)
   /* Invalidate old phys cursor if the glyph at its hpos is redrawn.  */
   if (updated_area == TEXT_AREA
       && w->phys_cursor_on_p
-      && w->phys_cursor.vpos == output_cursor.vpos
+      && w->phys_cursor.vpos == w->output_cursor.vpos
       && chpos >= hpos
       && chpos < hpos + len)
     w->phys_cursor_on_p = 0;
@@ -25802,8 +25736,8 @@ x_write_glyphs (struct window *w, struct glyph *start, int len)
   unblock_input ();
 
   /* Advance the output cursor.  */
-  output_cursor.hpos += len;
-  output_cursor.x = x;
+  w->output_cursor.hpos += len;
+  w->output_cursor.x = x;
 }
 
 
@@ -25811,7 +25745,8 @@ x_write_glyphs (struct window *w, struct glyph *start, int len)
    Insert LEN glyphs from START at the nominal cursor position.  */
 
 void
-x_insert_glyphs (struct window *w, struct glyph *start, int len)
+x_insert_glyphs (struct window *w, struct glyph_row *updated_row,
+		 struct glyph *start, enum glyph_row_area updated_area, int len)
 {
   struct frame *f;
   int line_height, shift_by_width, shifted_region_width;
@@ -25835,25 +25770,25 @@ x_insert_glyphs (struct window *w, struct glyph *start, int len)
 
   /* Get the width of the region to shift right.  */
   shifted_region_width = (window_box_width (w, updated_area)
-			  - output_cursor.x
+			  - w->output_cursor.x
 			  - shift_by_width);
 
   /* Shift right.  */
-  frame_x = window_box_left (w, updated_area) + output_cursor.x;
-  frame_y = WINDOW_TO_FRAME_PIXEL_Y (w, output_cursor.y);
+  frame_x = window_box_left (w, updated_area) + w->output_cursor.x;
+  frame_y = WINDOW_TO_FRAME_PIXEL_Y (w, w->output_cursor.y);
 
   FRAME_RIF (f)->shift_glyphs_for_insert (f, frame_x, frame_y, shifted_region_width,
                                           line_height, shift_by_width);
 
   /* Write the glyphs.  */
   hpos = start - row->glyphs[updated_area];
-  draw_glyphs (w, output_cursor.x, row, updated_area,
+  draw_glyphs (w, w->output_cursor.x, row, updated_area,
 	       hpos, hpos + len,
 	       DRAW_NORMAL_TEXT, 0);
 
   /* Advance the output cursor.  */
-  output_cursor.hpos += len;
-  output_cursor.x += shift_by_width;
+  w->output_cursor.hpos += len;
+  w->output_cursor.x += shift_by_width;
   unblock_input ();
 }
 
@@ -25863,11 +25798,12 @@ x_insert_glyphs (struct window *w, struct glyph *start, int len)
    (inclusive) to pixel column TO_X (exclusive).  The idea is that
    everything from TO_X onward is already erased.
 
-   TO_X is a pixel position relative to updated_area of currently
+   TO_X is a pixel position relative to UPDATED_AREA of currently
    updated window W.  TO_X == -1 means clear to the end of this area.  */
 
 void
-x_clear_end_of_line (struct window *w, int to_x)
+x_clear_end_of_line (struct window *w, struct glyph_row *updated_row,
+		     enum glyph_row_area updated_area, int to_x)
 {
   struct frame *f;
   int max_x, min_y, max_y;
@@ -25891,16 +25827,16 @@ x_clear_end_of_line (struct window *w, int to_x)
   else
     to_x = min (to_x, max_x);
 
-  to_y = min (max_y, output_cursor.y + updated_row->height);
+  to_y = min (max_y, w->output_cursor.y + updated_row->height);
 
   /* Notice if the cursor will be cleared by this operation.  */
   if (!updated_row->full_width_p)
     notice_overwritten_cursor (w, updated_area,
-			       output_cursor.x, -1,
+			       w->output_cursor.x, -1,
 			       updated_row->y,
 			       MATRIX_ROW_BOTTOM_Y (updated_row));
 
-  from_x = output_cursor.x;
+  from_x = w->output_cursor.x;
 
   /* Translate to frame coordinates.  */
   if (updated_row->full_width_p)
@@ -25916,7 +25852,7 @@ x_clear_end_of_line (struct window *w, int to_x)
     }
 
   min_y = WINDOW_HEADER_LINE_HEIGHT (w);
-  from_y = WINDOW_TO_FRAME_PIXEL_Y (w, max (min_y, output_cursor.y));
+  from_y = WINDOW_TO_FRAME_PIXEL_Y (w, max (min_y, w->output_cursor.y));
   to_y = WINDOW_TO_FRAME_PIXEL_Y (w, to_y);
 
   /* Prevent inadvertently clearing to end of the X window.  */
@@ -26463,7 +26399,7 @@ erase_phys_cursor (struct window *w)
    where to put the cursor is specified by HPOS, VPOS, X and Y.  */
 
 void
-display_and_set_cursor (struct window *w, int on,
+display_and_set_cursor (struct window *w, bool on,
 			int hpos, int vpos, int x, int y)
 {
   struct frame *f = XFRAME (w->frame);
@@ -26547,7 +26483,7 @@ display_and_set_cursor (struct window *w, int on,
    of ON.  */
 
 static void
-update_window_cursor (struct window *w, int on)
+update_window_cursor (struct window *w, bool on)
 {
   /* Don't update cursor in windows whose frame is in the process
      of being deleted.  */
@@ -26583,7 +26519,7 @@ update_window_cursor (struct window *w, int on)
    in the window tree rooted at W.  */
 
 static void
-update_cursor_in_window_tree (struct window *w, int on_p)
+update_cursor_in_window_tree (struct window *w, bool on_p)
 {
   while (w)
     {
@@ -26602,7 +26538,7 @@ update_cursor_in_window_tree (struct window *w, int on_p)
    Don't change the cursor's position.  */
 
 void
-x_update_cursor (struct frame *f, int on_p)
+x_update_cursor (struct frame *f, bool on_p)
 {
   update_cursor_in_window_tree (XWINDOW (f->root_window), on_p);
 }
@@ -26789,10 +26725,7 @@ clear_mouse_face (Mouse_HLInfo *hlinfo)
       cleared = 1;
     }
 
-  hlinfo->mouse_face_beg_row = hlinfo->mouse_face_beg_col = -1;
-  hlinfo->mouse_face_end_row = hlinfo->mouse_face_end_col = -1;
-  hlinfo->mouse_face_window = Qnil;
-  hlinfo->mouse_face_overlay = Qnil;
+  reset_mouse_highlight (hlinfo);
   return cleared;
 }
 
@@ -27105,9 +27038,7 @@ mouse_face_from_buffer_pos (Lisp_Object window,
       r1 = tem;
     }
 
-  hlinfo->mouse_face_beg_y = r1->y;
   hlinfo->mouse_face_beg_row = MATRIX_ROW_VPOS (r1, w->current_matrix);
-  hlinfo->mouse_face_end_y = r2->y;
   hlinfo->mouse_face_end_row = MATRIX_ROW_VPOS (r2, w->current_matrix);
 
   /* For a bidi-reordered row, the positions of BEFORE_STRING,
@@ -27471,7 +27402,6 @@ mouse_face_from_string_pos (struct window *w, Mouse_HLInfo *hlinfo,
 	      {
 		hlinfo->mouse_face_beg_row
 		  = MATRIX_ROW_VPOS (r, w->current_matrix);
-		hlinfo->mouse_face_beg_y = r->y;
 		hlinfo->mouse_face_beg_col = g - r->glyphs[TEXT_AREA];
 		hlinfo->mouse_face_beg_x = gx;
 		found = 1;
@@ -27490,7 +27420,6 @@ mouse_face_from_string_pos (struct window *w, Mouse_HLInfo *hlinfo,
 	      {
 		hlinfo->mouse_face_beg_row
 		  = MATRIX_ROW_VPOS (r, w->current_matrix);
-		hlinfo->mouse_face_beg_y = r->y;
 		hlinfo->mouse_face_beg_col = g - r->glyphs[TEXT_AREA];
 		for (gx = r->x, g1 = r->glyphs[TEXT_AREA]; g1 < g; ++g1)
 		  gx += g1->pixel_width;
@@ -27527,9 +27456,8 @@ mouse_face_from_string_pos (struct window *w, Mouse_HLInfo *hlinfo,
   /* The highlighted region ends on the previous row.  */
   r--;
 
-  /* Set the end row and its vertical pixel coordinate.  */
+  /* Set the end row.  */
   hlinfo->mouse_face_end_row = MATRIX_ROW_VPOS (r, w->current_matrix);
-  hlinfo->mouse_face_end_y = r->y;
 
   /* Compute and set the end column and the end column's horizontal
      pixel coordinate.  */
@@ -28027,8 +27955,6 @@ note_mode_line_or_margin_highlight (Lisp_Object window, int x, int y,
 
 	  hlinfo->mouse_face_beg_row  = vpos;
 	  hlinfo->mouse_face_end_row  = hlinfo->mouse_face_beg_row;
-	  hlinfo->mouse_face_beg_y    = 0;
-	  hlinfo->mouse_face_end_y    = 0;
 	  hlinfo->mouse_face_past_end = 0;
 	  hlinfo->mouse_face_window   = window;
 
@@ -28587,11 +28513,7 @@ cancel_mouse_face (struct frame *f)
 
   window = hlinfo->mouse_face_window;
   if (! NILP (window) && XFRAME (XWINDOW (window)->frame) == f)
-    {
-      hlinfo->mouse_face_beg_row = hlinfo->mouse_face_beg_col = -1;
-      hlinfo->mouse_face_end_row = hlinfo->mouse_face_end_col = -1;
-      hlinfo->mouse_face_window = Qnil;
-    }
+    reset_mouse_highlight (hlinfo);
 }
 
 
@@ -28791,7 +28713,7 @@ x_draw_vertical_border (struct window *w)
     {
       int x0, x1, y0, y1;
 
-      window_box_edges (w, -1, &x0, &y0, &x1, &y1);
+      window_box_edges (w, &x0, &y0, &x1, &y1);
       y1 -= 1;
 
       if (WINDOW_LEFT_FRINGE_WIDTH (w) == 0)
@@ -28804,7 +28726,7 @@ x_draw_vertical_border (struct window *w)
     {
       int x0, x1, y0, y1;
 
-      window_box_edges (w, -1, &x0, &y0, &x1, &y1);
+      window_box_edges (w, &x0, &y0, &x1, &y1);
       y1 -= 1;
 
       if (WINDOW_LEFT_FRINGE_WIDTH (w) == 0)
@@ -29713,8 +29635,10 @@ cursor shapes.  */);
 	       doc: /* Seconds to wait before displaying an hourglass pointer when Emacs is busy.  */);
   Vhourglass_delay = make_number (DEFAULT_HOURGLASS_DELAY);
 
+#ifdef HAVE_WINDOW_SYSTEM
   hourglass_atimer = NULL;
   hourglass_shown_p = 0;
+#endif /* HAVE_WINDOW_SYSTEM */
 
   DEFSYM (Qglyphless_char, "glyphless-char");
   DEFSYM (Qhex_code, "hex-code");
@@ -29723,10 +29647,6 @@ cursor shapes.  */);
   DEFSYM (Qzero_width, "zero-width");
 
   DEFSYM (Qglyphless_char_display, "glyphless-char-display");
-  /* Intern this now in case it isn't already done.
-     Setting this variable twice is harmless.
-     But don't staticpro it here--that is done in alloc.c.  */
-  Qchar_table_extra_slots = intern_c_string ("char-table-extra-slots");
   Fput (Qglyphless_char_display, Qchar_table_extra_slots, make_number (1));
 
   DEFVAR_LISP ("glyphless-char-display", Vglyphless_char_display,
@@ -29760,8 +29680,6 @@ Its value should be an ASCII acronym string, `hex-code', `empty-box', or
 void
 init_xdisp (void)
 {
-  current_header_line_height = current_mode_line_height = -1;
-
   CHARPOS (this_line_start_pos) = 0;
 
   if (!noninteractive)
@@ -29805,27 +29723,28 @@ init_xdisp (void)
   help_echo_showing_p = 0;
 }
 
+#ifdef HAVE_WINDOW_SYSTEM
+
 /* Platform-independent portion of hourglass implementation.  */
 
 /* Cancel a currently active hourglass timer, and start a new one.  */
 void
 start_hourglass (void)
 {
-#if defined (HAVE_WINDOW_SYSTEM)
-  EMACS_TIME delay;
+  struct timespec delay;
 
   cancel_hourglass ();
 
   if (INTEGERP (Vhourglass_delay)
       && XINT (Vhourglass_delay) > 0)
-    delay = make_emacs_time (min (XINT (Vhourglass_delay),
+    delay = make_timespec (min (XINT (Vhourglass_delay),
 				  TYPE_MAXIMUM (time_t)),
-			     0);
+			   0);
   else if (FLOATP (Vhourglass_delay)
 	   && XFLOAT_DATA (Vhourglass_delay) > 0)
-    delay = EMACS_TIME_FROM_DOUBLE (XFLOAT_DATA (Vhourglass_delay));
+    delay = dtotimespec (XFLOAT_DATA (Vhourglass_delay));
   else
-    delay = make_emacs_time (DEFAULT_HOURGLASS_DELAY, 0);
+    delay = make_timespec (DEFAULT_HOURGLASS_DELAY, 0);
 
 #ifdef HAVE_NTGUI
   {
@@ -29836,7 +29755,6 @@ start_hourglass (void)
 
   hourglass_atimer = start_atimer (ATIMER_RELATIVE, delay,
 				   show_hourglass, NULL);
-#endif
 }
 
 
@@ -29845,7 +29763,6 @@ start_hourglass (void)
 void
 cancel_hourglass (void)
 {
-#if defined (HAVE_WINDOW_SYSTEM)
   if (hourglass_atimer)
     {
       cancel_atimer (hourglass_atimer);
@@ -29854,5 +29771,6 @@ cancel_hourglass (void)
 
   if (hourglass_shown_p)
     hide_hourglass ();
-#endif
 }
+
+#endif /* HAVE_WINDOW_SYSTEM */

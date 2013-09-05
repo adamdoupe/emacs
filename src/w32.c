@@ -247,7 +247,7 @@ static BOOL WINAPI revert_to_self (void);
 extern int sys_access (const char *, int);
 extern void *e_malloc (size_t);
 extern int sys_select (int, SELECT_TYPE *, SELECT_TYPE *, SELECT_TYPE *,
-		       EMACS_TIME *, void *);
+		       struct timespec *, void *);
 extern int sys_dup (int);
 
 
@@ -2503,8 +2503,6 @@ gettimeofday (struct timeval *__restrict tv, struct timezone *__restrict tz)
 int
 fdutimens (int fd, char const *file, struct timespec const timespec[2])
 {
-  struct _utimbuf ut;
-
   if (!timespec)
     {
       errno = ENOSYS;
@@ -2515,12 +2513,28 @@ fdutimens (int fd, char const *file, struct timespec const timespec[2])
       errno = EBADF;
       return -1;
     }
-  ut.actime = timespec[0].tv_sec;
-  ut.modtime = timespec[1].tv_sec;
+  /* _futime's prototype defines 2nd arg as having the type 'struct
+     _utimbuf', while utime needs to accept 'struct utimbuf' for
+     compatibility with Posix.  So we need to use 2 different (but
+     equivalent) types to avoid compiler warnings, sigh.  */
   if (fd >= 0)
-    return _futime (fd, &ut);
+    {
+      struct _utimbuf _ut;
+
+      _ut.actime = timespec[0].tv_sec;
+      _ut.modtime = timespec[1].tv_sec;
+      return _futime (fd, &_ut);
+    }
   else
-    return _utime (file, &ut);
+    {
+      struct utimbuf ut;
+
+      ut.actime = timespec[0].tv_sec;
+      ut.modtime = timespec[1].tv_sec;
+      /* Call 'utime', which is implemented below, not the MS library
+	 function, which fails on directories.  */
+      return utime (file, &ut);
+    }
 }
 
 
@@ -4501,6 +4515,9 @@ fstat (int desc, struct stat * buf)
   return 0;
 }
 
+/* A version of 'utime' which handles directories as well as
+   files.  */
+
 int
 utime (const char *name, struct utimbuf *times)
 {
@@ -6075,6 +6092,7 @@ term_winsock (void)
 {
   if (winsock_lib != NULL && winsock_inuse == 0)
     {
+      release_listen_threads ();
       /* Not sure what would cause WSAENETDOWN, or even if it can happen
 	 after WSAStartup returns successfully, but it seems reasonable
 	 to allow unloading winsock anyway in that case. */
@@ -7059,7 +7077,12 @@ _sys_wait_accept (int fd)
   rc = pfn_WSAEventSelect (SOCK_HANDLE (fd), hEv, FD_ACCEPT);
   if (rc != SOCKET_ERROR)
     {
-      rc = WaitForSingleObject (hEv, INFINITE);
+      do {
+	rc = WaitForSingleObject (hEv, 500);
+	Sleep (5);
+      } while (rc == WAIT_TIMEOUT
+	       && cp->status != STATUS_READ_ERROR
+	       && cp->char_avail);
       pfn_WSAEventSelect (SOCK_HANDLE (fd), NULL, 0);
       if (rc == WAIT_OBJECT_0)
 	cp->status = STATUS_READ_SUCCEEDED;
@@ -7922,7 +7945,7 @@ emacs_gnutls_pull (gnutls_transport_ptr_t p, void* buf, size_t sz)
 {
   int n, err;
   SELECT_TYPE fdset;
-  EMACS_TIME timeout;
+  struct timespec timeout;
   struct Lisp_Process *process = (struct Lisp_Process *)p;
   int fd = process->infd;
 

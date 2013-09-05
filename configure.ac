@@ -24,18 +24,43 @@ dnl  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 AC_PREREQ(2.65)
 AC_INIT(emacs, 24.3.50)
 
+dnl Set emacs_config_options to the options of 'configure', quoted for the shell,
+dnl and then quoted again for a C string.  Separate options with spaces.
+dnl Add some environment variables, if they were passed via the environment
+dnl rather than on the command-line.
+emacs_config_options=
+optsep=
 dnl This is the documented way to record the args passed to configure,
 dnl rather than $ac_configure_args.
-emacs_config_options="$@"
-## Add some environment variables, if they were passed via the environment
-## rather than on the command-line.
-for var in CFLAGS CPPFLAGS LDFLAGS; do
-    case "$emacs_config_options" in
-      *$var=*) continue ;;
-    esac
-    eval val="\$${var}"
-    test x"$val" = x && continue
-    emacs_config_options="${emacs_config_options}${emacs_config_options:+ }$var=\"$val\""
+for opt in ${1+"$@"} CFLAGS CPPFLAGS LDFLAGS; do
+  case $opt in
+    -n | --no-create | --no-recursion)
+      continue ;;
+    CFLAGS | CPPFLAGS | LDFLAGS)
+      eval 'test "${'$opt'+set}" = set' || continue
+      case " $*" in
+	*" $opt="*) continue ;;
+      esac
+      eval opt=$opt=\$$opt ;;
+  esac
+
+  emacs_shell_specials=$IFS\''"#$&()*;<>?@<:@\\`{|~'
+  case $opt in
+    *[["$emacs_shell_specials"]]*)
+      case $opt in
+	*\'*)
+	  emacs_quote_apostrophes="s/'/'\\\\''/g"
+	  opt=`AS_ECHO(["$opt"]) | sed "$emacs_quote_apostrophes"` ;;
+      esac
+      opt="'$opt'"
+      case $opt in
+	*[['"\\']]*)
+	  emacs_quote_for_c='s/[["\\]]/\\&/g; $!s/$/\\n\\/'
+	  opt=`AS_ECHO(["$opt"]) | sed "$emacs_quote_for_c"` ;;
+      esac ;;
+  esac
+  AS_VAR_APPEND([emacs_config_options], ["$optsep$opt"])
+  optsep=' '
 done
 
 AC_CONFIG_HEADER(src/config.h:src/config.in)
@@ -142,12 +167,12 @@ AC_ARG_WITH([mailhost],[AS_HELP_STRING([--with-mailhost=HOSTNAME],
     AC_DEFINE_UNQUOTED(MAILHOST, ["$withval"], [String giving fallback POP mail host.]))
 
 AC_ARG_WITH([sound],[AS_HELP_STRING([--with-sound=VALUE],
-  [compile with sound support (VALUE one of: yes, ossaudio, alsa, no;
+  [compile with sound support (VALUE one of: yes, alsa, oss, bsd-ossaudio, no;
 default yes).  Only for GNU/Linux, FreeBSD, NetBSD, MinGW.])],
   [ case "${withval}" in
-      yes|no|ossaudio|alsa) val=$withval ;;
+      yes|no|alsa|oss|bsd-ossaudio) val=$withval ;;
       *) AC_MSG_ERROR([`--with-sound=$withval' is invalid;
-this option's value should be `yes', `no', `ossaudio', or `alsa'.])
+this option's value should be `yes', `no', `alsa', `oss', or `bsd-ossaudio'.])
       ;;
     esac
     with_sound=$val
@@ -972,6 +997,13 @@ INFO_OPTS=--no-split
 AC_SUBST(INFO_EXT)
 AC_SUBST(INFO_OPTS)
 
+if test $opsys = mingw32; then
+   DOCMISC_W32=efaq-w32
+else
+   DOCMISC_W32=
+fi
+AC_SUBST(DOCMISC_W32)
+
 dnl Add our options to ac_link now, after it is set up.
 
 if test x$GCC = xyes; then
@@ -1275,12 +1307,15 @@ if test "${with_sound}" != "no"; then
     #include <windows.h>
     #endif
     ])
-  if test "${with_sound}" = "ossaudio" || test "${with_sound}" = "yes"; then
+  test "${with_sound}" = "oss" && test "${have_sound_header}" != "yes" && \
+    AC_MSG_ERROR([OSS sound support requested but not found.])
+
+  if test "${with_sound}" = "bsd-ossaudio" || test "${with_sound}" = "yes"; then
     # Emulation library used on NetBSD.
     AC_CHECK_LIB(ossaudio, _oss_ioctl, LIBSOUND=-lossaudio, LIBSOUND=)
-    test "${with_sound}" = "ossaudio" && test -z "$LIBSOUND" && \
-      AC_MSG_ERROR([ossaudio sound support requested but not found.])
-    dnl FIXME?  If we did find ossaudio, should we set with_sound=ossaudio?
+    test "${with_sound}" = "bsd-ossaudio" && test -z "$LIBSOUND" && \
+      AC_MSG_ERROR([bsd-ossaudio sound support requested but not found.])
+    dnl FIXME?  If we did find ossaudio, should we set with_sound=bsd-ossaudio?
     dnl Traditionally, we go on to check for alsa too.  Does that make sense?
   fi
   AC_SUBST(LIBSOUND)
@@ -1739,6 +1774,13 @@ fi
 
 ## $window_system is now set to the window system we will
 ## ultimately use.
+
+if test "$window_system" = none && test "$gl_gcc_warnings" = yes; then
+   # Too many warnings for now.
+   gl_WARN_ADD([-Wno-unused-variable])
+   gl_WARN_ADD([-Wno-unused-but-set-variable])
+   gl_WARN_ADD([-Wno-unused-but-set-parameter])
+fi
 
 term_header=
 HAVE_X_WINDOWS=no
@@ -3822,7 +3864,7 @@ emacs_broken_SIGIO=no
 case $opsys in
   dnl SIGIO exists, but the feature doesn't work in the way Emacs needs.
   dnl See eg <http://article.gmane.org/gmane.os.openbsd.ports/46831>.
-  hpux* | irix6-5 | openbsd | sol2* | unixware | gnu-kfreebsd )
+  hpux* | irix6-5 | openbsd | sol2* | unixware )
     emacs_broken_SIGIO=yes
     ;;
 
@@ -3994,7 +4036,7 @@ case $opsys in
       AC_DEFINE(PTY_TTY_NAME_SPRINTF, [{ char *ptyname = 0; sigset_t blocked; sigemptyset (&blocked); sigaddset (&blocked, SIGCHLD); pthread_sigmask (SIG_BLOCK, &blocked, 0); if (grantpt (fd) != -1 && unlockpt (fd) != -1) ptyname = ptsname(fd); pthread_sigmask (SIG_UNBLOCK, &blocked, 0); if (!ptyname) { emacs_close (fd); return -1; } snprintf (pty_name, PTY_NAME_SIZE, "%s", ptyname); }])
       dnl if HAVE_POSIX_OPENPT
       if test "x$ac_cv_func_posix_openpt" = xyes; then
-        AC_DEFINE(PTY_OPEN, [fd = posix_openpt (O_RDWR | O_CLOEXEC | O_NOCTTY)])
+        AC_DEFINE(PTY_OPEN, [do { fd = posix_openpt (O_RDWR | O_CLOEXEC | O_NOCTTY); if (fd < 0 && errno == EINVAL) fd = posix_openpt (O_RDWR | O_NOCTTY); } while (0)])
         AC_DEFINE(PTY_NAME_SPRINTF, [])
       dnl if HAVE_GETPT
       elif test "x$ac_cv_func_getpt" = xyes; then
@@ -4440,8 +4482,6 @@ fi
 
 AC_DEFINE_UNQUOTED(EMACS_CONFIGURATION,  "${canonical}",
 		   [Define to the canonical Emacs configuration name.])
-dnl Replace any embedded " characters (bug#13274).
-emacs_config_options=`echo "$emacs_config_options " | sed -e 's/--no-create //' -e 's/--no-recursion //' -e 's/ *$//' -e "s/\"/'/g" -e 's/\\\\/\\\\\\\\/g'`
 AC_DEFINE_UNQUOTED(EMACS_CONFIG_OPTIONS, "${emacs_config_options}",
 		   [Define to the options passed to configure.])
 AH_TEMPLATE(config_opsysfile, [Some platforms that do not use configure
@@ -4864,10 +4904,13 @@ if test "$HAVE_NS" = "yes"; then
   if test "$NS_IMPL_GNUSTEP" = yes; then
     AC_CONFIG_FILES([nextstep/GNUstep/Emacs.base/Resources/Info-gnustep.plist:nextstep/templates/Info-gnustep.plist.in \
       nextstep/GNUstep/Emacs.base/Resources/Emacs.desktop:nextstep/templates/Emacs.desktop.in])
+    ns_check_file=Resources/Info-gnustep.plist
   else
     AC_CONFIG_FILES([nextstep/Cocoa/Emacs.base/Contents/Info.plist:nextstep/templates/Info.plist.in \
       nextstep/Cocoa/Emacs.base/Contents/Resources/English.lproj/InfoPlist.strings:nextstep/templates/InfoPlist.strings.in])
+    ns_check_file=Contents/Info.plist
   fi
+  AC_SUBST(ns_check_file)
 fi
 
 dnl Obviously there is duplication here wrt $SUBDIR_MAKEFILES.

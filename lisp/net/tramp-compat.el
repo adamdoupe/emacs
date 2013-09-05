@@ -186,7 +186,7 @@
 ;; `with-temp-message' does not exist in XEmacs.
 (if (fboundp 'with-temp-message)
     (defalias 'tramp-compat-with-temp-message 'with-temp-message)
-  (defmacro tramp-compat-with-temp-message (message &rest body)
+  (defmacro tramp-compat-with-temp-message (_message &rest body)
     "Display MESSAGE temporarily if non-nil while BODY is evaluated."
     `(progn ,@body)))
 
@@ -517,11 +517,6 @@ EOL-TYPE can be one of `dos', `unix', or `mac'."
 			eol-type
 			"`dos', `unix', or `mac'")))))
         (t (error "Can't change EOL conversion -- is MULE missing?"))))
-
-;; `user-error' has been added to Emacs 24.3.
-(defun tramp-compat-user-error (format &rest args)
-  "Signal a pilot error."
-  (apply (if (fboundp 'user-error) 'user-error 'error) format args))
 
 (add-hook 'tramp-unload-hook
 	  (lambda ()

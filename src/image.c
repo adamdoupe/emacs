@@ -30,12 +30,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #endif
 
 #include <setjmp.h>
-
 #include <c-ctype.h>
-
-/* This makes the fields of a Display accessible, in Xlib header files.  */
-
-#define XLIB_ILLEGAL_ACCESS
 
 #include "lisp.h"
 #include "frame.h"
@@ -145,7 +140,7 @@ static Lisp_Object QCmax_width, QCmax_height;
 
 #ifdef HAVE_NS
 /* Use with images created by ns_image_for_XPM.  */
-unsigned long
+static unsigned long
 XGetPixel (XImagePtr ximage, int x, int y)
 {
   return ns_get_pixel (ximage, x, y);
@@ -153,7 +148,7 @@ XGetPixel (XImagePtr ximage, int x, int y)
 
 /* Use with images created by ns_image_for_XPM; alpha set to 1;
    pixel is assumed to be in RGB form.  */
-void
+static void
 XPutPixel (XImagePtr ximage, int x, int y, unsigned long pixel)
 {
   ns_put_pixel (ximage, x, y, pixel);
@@ -563,7 +558,6 @@ static void x_emboss (struct frame *, struct image *);
 static void x_build_heuristic_mask (struct frame *, struct image *,
                                     Lisp_Object);
 #ifdef WINDOWSNT
-extern Lisp_Object Vlibrary_cache;
 #define CACHE_IMAGE_TYPE(type, status) \
   do { Vlibrary_cache = Fcons (Fcons (type, status), Vlibrary_cache); } while (0)
 #else
@@ -1042,7 +1036,7 @@ void
 prepare_image_for_display (struct frame *f, struct image *img)
 {
   /* We're about to display IMG, so set its timestamp to `now'.  */
-  img->timestamp = current_emacs_time ();
+  img->timestamp = current_timespec ();
 
   /* If IMG doesn't have a pixmap yet, load it now, using the image
      type dependent loader function.  */
@@ -1481,7 +1475,7 @@ clear_image_cache (struct frame *f, Lisp_Object filter)
       else if (INTEGERP (Vimage_cache_eviction_delay))
 	{
 	  /* Free cache based on timestamp.  */
-	  EMACS_TIME old, t;
+	  struct timespec old, t;
 	  double delay;
 	  ptrdiff_t nimages = 0;
 
@@ -1496,13 +1490,13 @@ clear_image_cache (struct frame *f, Lisp_Object filter)
 	    delay = 1600 * delay / nimages / nimages;
 	  delay = max (delay, 1);
 
-	  t = current_emacs_time ();
-	  old = sub_emacs_time (t, EMACS_TIME_FROM_DOUBLE (delay));
+	  t = current_timespec ();
+	  old = timespec_sub (t, dtotimespec (delay));
 
 	  for (i = 0; i < c->used; ++i)
 	    {
 	      struct image *img = c->images[i];
-	      if (img && EMACS_TIME_LT (img->timestamp, old))
+	      if (img && timespec_cmp (img->timestamp, old) < 0)
 		{
 		  free_image (f, img);
 		  ++nfreed;
@@ -1765,7 +1759,7 @@ lookup_image (struct frame *f, Lisp_Object spec)
     }
 
   /* We're using IMG, so set its timestamp to `now'.  */
-  img->timestamp = current_emacs_time ();
+  img->timestamp = current_timespec ();
 
   /* Value is the image id.  */
   return img->id;
@@ -2713,10 +2707,13 @@ xbm_read_bitmap_data (struct frame *f, unsigned char *contents, unsigned char *e
      LA1 = xbm_scan (&s, end, buffer, &value)
 
 #define expect(TOKEN)		\
-     if (LA1 != (TOKEN)) 	\
-       goto failure;		\
-     else			\
-       match ()
+  do				\
+    {				\
+      if (LA1 != (TOKEN)) 	\
+	goto failure;		\
+      match ();			\
+    }				\
+  while (0)
 
 #define expect_ident(IDENT)					\
      if (LA1 == XBM_TK_IDENT && strcmp (buffer, (IDENT)) == 0)	\
@@ -3976,10 +3973,13 @@ xpm_load_image (struct frame *f,
      LA1 = xpm_scan (&s, end, &beg, &len)
 
 #define expect(TOKEN)		\
-     if (LA1 != (TOKEN)) 	\
-       goto failure;		\
-     else			\
-       match ()
+  do				\
+    {				\
+      if (LA1 != (TOKEN)) 	\
+	goto failure;		\
+      match ();			\
+    }				\
+  while (0)
 
 #define expect_ident(IDENT)					\
      if (LA1 == XPM_TK_IDENT \
@@ -4932,7 +4932,7 @@ x_build_heuristic_mask (struct frame *f, struct image *img, Lisp_Object how)
   int row_width;
 #endif /* HAVE_NTGUI */
   int x, y;
-  bool rc, use_img_background;
+  bool use_img_background;
   unsigned long bg = 0;
 
   if (img->mask)
@@ -4941,9 +4941,8 @@ x_build_heuristic_mask (struct frame *f, struct image *img, Lisp_Object how)
 #ifndef HAVE_NTGUI
 #ifndef HAVE_NS
   /* Create an image and pixmap serving as mask.  */
-  rc = image_create_x_image_and_pixmap (f, img, img->width, img->height, 1,
-					&mask_img, 1);
-  if (!rc)
+  if (! image_create_x_image_and_pixmap (f, img, img->width, img->height, 1,
+					 &mask_img, 1))
     return;
 #endif /* !HAVE_NS */
 #else
@@ -7878,11 +7877,11 @@ imagemagick_filename_hint (Lisp_Object spec, char hint_buffer[MaxTextExtent])
 
 struct animation_cache
 {
-  char *signature;
   MagickWand *wand;
   int index;
-  EMACS_TIME update_time;
+  struct timespec update_time;
   struct animation_cache *next;
+  char signature[FLEXIBLE_ARRAY_MEMBER];
 };
 
 static struct animation_cache *animation_cache = NULL;
@@ -7890,12 +7889,13 @@ static struct animation_cache *animation_cache = NULL;
 static struct animation_cache *
 imagemagick_create_cache (char *signature)
 {
-  struct animation_cache *cache = xmalloc (sizeof *cache);
-  cache->signature = signature;
+  struct animation_cache *cache
+    = xmalloc (offsetof (struct animation_cache, signature)
+	       + strlen (signature) + 1);
   cache->wand = 0;
   cache->index = 0;
   cache->next = 0;
-  cache->update_time = current_emacs_time ();
+  strcpy (cache->signature, signature);
   return cache;
 }
 
@@ -7904,17 +7904,16 @@ static void
 imagemagick_prune_animation_cache (void)
 {
   struct animation_cache **pcache = &animation_cache;
-  EMACS_TIME old = sub_emacs_time (current_emacs_time (),
-				   make_emacs_time (60, 0));
+  struct timespec old = timespec_sub (current_timespec (),
+				      make_timespec (60, 0));
 
   while (*pcache)
     {
       struct animation_cache *cache = *pcache;
-      if (EMACS_TIME_LE (old, cache->update_time))
+      if (timespec_cmp (old, cache->update_time) <= 0)
 	pcache = &cache->next;
       else
 	{
-	  DestroyString (cache->signature);
 	  if (cache->wand)
 	    DestroyMagickWand (cache->wand);
 	  *pcache = cache->next;
@@ -7928,28 +7927,25 @@ imagemagick_get_animation_cache (MagickWand *wand)
 {
   char *signature = MagickGetImageSignature (wand);
   struct animation_cache *cache;
+  struct animation_cache **pcache = &animation_cache;
 
   imagemagick_prune_animation_cache ();
-  cache = animation_cache;
 
-  if (! cache)
+  while (1)
     {
-      animation_cache = imagemagick_create_cache (signature);
-      return animation_cache;
+      cache = *pcache;
+      if (! cache)
+	{
+          *pcache = cache = imagemagick_create_cache (signature);
+          break;
+        }
+      if (strcmp (signature, cache->signature) == 0)
+	break;
+      pcache = &cache->next;
     }
 
-  while (strcmp (signature, cache->signature) &&
-	 cache->next)
-    cache = cache->next;
-
-  if (strcmp (signature, cache->signature))
-    {
-      cache->next = imagemagick_create_cache (signature);
-      DestroyString (signature);
-      return cache->next;
-    }
-
-  cache->update_time = current_emacs_time ();
+  DestroyString (signature);
+  cache->update_time = current_timespec ();
   return cache;
 }
 

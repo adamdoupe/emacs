@@ -604,6 +604,7 @@ am__EXEEXT_TRUE
 LTLIBOBJS
 LIBOBJS
 SUBDIR_MAKEFILES_IN
+ns_check_file
 WINDOW_SYSTEM_OBJ
 EMACS_HEAPSIZE
 TEMACS_POST_LINK
@@ -1397,6 +1398,7 @@ UNEXEC_OBJ
 C_SWITCH_MACHINE
 LD_SWITCH_SYSTEM
 CANNOT_DUMP
+DOCMISC_W32
 INFO_OPTS
 INFO_EXT
 HAVE_MAKEINFO
@@ -2241,8 +2243,8 @@ Optional Packages:
   --with-mail-unlink      unlink, rather than empty, mail spool after reading
   --with-mailhost=HOSTNAME
                           string giving default POP mail host
-  --with-sound=VALUE      compile with sound support (VALUE one of: yes,
-                          ossaudio, alsa, no; default yes). Only for
+  --with-sound=VALUE      compile with sound support (VALUE one of: yes, alsa,
+                          oss, bsd-ossaudio, no; default yes). Only for
                           GNU/Linux, FreeBSD, NetBSD, MinGW.
   --with-x-toolkit=KIT    use an X toolkit (KIT one of: yes or gtk, gtk2,
                           gtk3, lucid or athena, motif, no)
@@ -3486,16 +3488,37 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
 
-emacs_config_options="$@"
-## Add some environment variables, if they were passed via the environment
-## rather than on the command-line.
-for var in CFLAGS CPPFLAGS LDFLAGS; do
-    case "$emacs_config_options" in
-      *$var=*) continue ;;
-    esac
-    eval val="\$${var}"
-    test x"$val" = x && continue
-    emacs_config_options="${emacs_config_options}${emacs_config_options:+ }$var=\"$val\""
+emacs_config_options=
+optsep=
+for opt in ${1+"$@"} CFLAGS CPPFLAGS LDFLAGS; do
+  case $opt in
+    -n | --no-create | --no-recursion)
+      continue ;;
+    CFLAGS | CPPFLAGS | LDFLAGS)
+      eval 'test "${'$opt'+set}" = set' || continue
+      case " $*" in
+	*" $opt="*) continue ;;
+      esac
+      eval opt=$opt=\$$opt ;;
+  esac
+
+  emacs_shell_specials=$IFS\''"#$&()*;<>?[\\`{|~'
+  case $opt in
+    *["$emacs_shell_specials"]*)
+      case $opt in
+	*\'*)
+	  emacs_quote_apostrophes="s/'/'\\\\''/g"
+	  opt=`$as_echo "$opt" | sed "$emacs_quote_apostrophes"` ;;
+      esac
+      opt="'$opt'"
+      case $opt in
+	*['"\\']*)
+	  emacs_quote_for_c='s/["\\]/\\&/g; $!s/$/\\n\\/'
+	  opt=`$as_echo "$opt" | sed "$emacs_quote_for_c"` ;;
+      esac ;;
+  esac
+  as_fn_append emacs_config_options "$optsep$opt"
+  optsep=' '
 done
 
 ac_config_headers="$ac_config_headers src/config.h:src/config.in"
@@ -4129,9 +4152,9 @@ fi
 # Check whether --with-sound was given.
 if test "${with_sound+set}" = set; then :
   withval=$with_sound;  case "${withval}" in
-      yes|no|ossaudio|alsa) val=$withval ;;
+      yes|no|alsa|oss|bsd-ossaudio) val=$withval ;;
       *) as_fn_error "\`--with-sound=$withval' is invalid;
-this option's value should be \`yes', \`no', \`ossaudio', or \`alsa'." "$LINENO" 5
+this option's value should be \`yes', \`no', \`alsa', \`oss', or \`bsd-ossaudio'." "$LINENO" 5
       ;;
     esac
     with_sound=$val
@@ -8734,6 +8757,13 @@ INFO_OPTS=--no-split
 
 
 
+if test $opsys = mingw32; then
+   DOCMISC_W32=efaq-w32
+else
+   DOCMISC_W32=
+fi
+
+
 
 if test x$GCC = xyes; then
   test "x$GCC_LINK_TEST_OPTIONS" != x && \
@@ -9052,7 +9082,10 @@ fi
 
 done
 
-  if test "${with_sound}" = "ossaudio" || test "${with_sound}" = "yes"; then
+  test "${with_sound}" = "oss" && test "${have_sound_header}" != "yes" && \
+    as_fn_error "OSS sound support requested but not found." "$LINENO" 5
+
+  if test "${with_sound}" = "bsd-ossaudio" || test "${with_sound}" = "yes"; then
     # Emulation library used on NetBSD.
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking for _oss_ioctl in -lossaudio" >&5
 $as_echo_n "checking for _oss_ioctl in -lossaudio... " >&6; }
@@ -9096,8 +9129,8 @@ else
   LIBSOUND=
 fi
 
-    test "${with_sound}" = "ossaudio" && test -z "$LIBSOUND" && \
-      as_fn_error "ossaudio sound support requested but not found." "$LINENO" 5
+    test "${with_sound}" = "bsd-ossaudio" && test -z "$LIBSOUND" && \
+      as_fn_error "bsd-ossaudio sound support requested but not found." "$LINENO" 5
           fi
 
 
@@ -10306,6 +10339,118 @@ fi
 
 ## $window_system is now set to the window system we will
 ## ultimately use.
+
+if test "$window_system" = none && test "$gl_gcc_warnings" = yes; then
+   # Too many warnings for now.
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether C compiler handles -Wno-unused-variable" >&5
+$as_echo_n "checking whether C compiler handles -Wno-unused-variable... " >&6; }
+if test "${gl_cv_warn_c__Wno_unused_variable+set}" = set; then :
+  $as_echo_n "(cached) " >&6
+else
+
+  gl_save_compiler_FLAGS="$CFLAGS"
+  as_fn_append CFLAGS " $gl_unknown_warnings_are_errors -Wunused-variable"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  gl_cv_warn_c__Wno_unused_variable=yes
+else
+  gl_cv_warn_c__Wno_unused_variable=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+  CFLAGS="$gl_save_compiler_FLAGS"
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $gl_cv_warn_c__Wno_unused_variable" >&5
+$as_echo "$gl_cv_warn_c__Wno_unused_variable" >&6; }
+if test "x$gl_cv_warn_c__Wno_unused_variable" = x""yes; then :
+  as_fn_append WARN_CFLAGS " -Wno-unused-variable"
+fi
+
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether C compiler handles -Wno-unused-but-set-variable" >&5
+$as_echo_n "checking whether C compiler handles -Wno-unused-but-set-variable... " >&6; }
+if test "${gl_cv_warn_c__Wno_unused_but_set_variable+set}" = set; then :
+  $as_echo_n "(cached) " >&6
+else
+
+  gl_save_compiler_FLAGS="$CFLAGS"
+  as_fn_append CFLAGS " $gl_unknown_warnings_are_errors -Wunused-but-set-variable"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  gl_cv_warn_c__Wno_unused_but_set_variable=yes
+else
+  gl_cv_warn_c__Wno_unused_but_set_variable=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+  CFLAGS="$gl_save_compiler_FLAGS"
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $gl_cv_warn_c__Wno_unused_but_set_variable" >&5
+$as_echo "$gl_cv_warn_c__Wno_unused_but_set_variable" >&6; }
+if test "x$gl_cv_warn_c__Wno_unused_but_set_variable" = x""yes; then :
+  as_fn_append WARN_CFLAGS " -Wno-unused-but-set-variable"
+fi
+
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether C compiler handles -Wno-unused-but-set-parameter" >&5
+$as_echo_n "checking whether C compiler handles -Wno-unused-but-set-parameter... " >&6; }
+if test "${gl_cv_warn_c__Wno_unused_but_set_parameter+set}" = set; then :
+  $as_echo_n "(cached) " >&6
+else
+
+  gl_save_compiler_FLAGS="$CFLAGS"
+  as_fn_append CFLAGS " $gl_unknown_warnings_are_errors -Wunused-but-set-parameter"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  gl_cv_warn_c__Wno_unused_but_set_parameter=yes
+else
+  gl_cv_warn_c__Wno_unused_but_set_parameter=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+  CFLAGS="$gl_save_compiler_FLAGS"
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $gl_cv_warn_c__Wno_unused_but_set_parameter" >&5
+$as_echo "$gl_cv_warn_c__Wno_unused_but_set_parameter" >&6; }
+if test "x$gl_cv_warn_c__Wno_unused_but_set_parameter" = x""yes; then :
+  as_fn_append WARN_CFLAGS " -Wno-unused-but-set-parameter"
+fi
+
+
+fi
 
 term_header=
 HAVE_X_WINDOWS=no
@@ -16455,7 +16600,7 @@ esac
 emacs_broken_SIGIO=no
 
 case $opsys in
-      hpux* | irix6-5 | openbsd | sol2* | unixware | gnu-kfreebsd )
+      hpux* | irix6-5 | openbsd | sol2* | unixware )
     emacs_broken_SIGIO=yes
     ;;
 
@@ -16573,7 +16718,7 @@ $as_echo "#define UNIX98_PTYS 1" >>confdefs.h
                   $as_echo "#define PTY_TTY_NAME_SPRINTF { char *ptyname = 0; sigset_t blocked; sigemptyset (&blocked); sigaddset (&blocked, SIGCHLD); pthread_sigmask (SIG_BLOCK, &blocked, 0); if (grantpt (fd) != -1 && unlockpt (fd) != -1) ptyname = ptsname(fd); pthread_sigmask (SIG_UNBLOCK, &blocked, 0); if (!ptyname) { emacs_close (fd); return -1; } snprintf (pty_name, PTY_NAME_SIZE, \"%s\", ptyname); }" >>confdefs.h
 
             if test "x$ac_cv_func_posix_openpt" = xyes; then
-        $as_echo "#define PTY_OPEN fd = posix_openpt (O_RDWR | O_CLOEXEC | O_NOCTTY)" >>confdefs.h
+        $as_echo "#define PTY_OPEN do { fd = posix_openpt (O_RDWR | O_CLOEXEC | O_NOCTTY); if (fd < 0 && errno == EINVAL) fd = posix_openpt (O_RDWR | O_NOCTTY); } while (0)" >>confdefs.h
 
         $as_echo "#define PTY_NAME_SPRINTF /**/" >>confdefs.h
 
@@ -17173,7 +17318,6 @@ cat >>confdefs.h <<_ACEOF
 #define EMACS_CONFIGURATION "${canonical}"
 _ACEOF
 
-emacs_config_options=`echo "$emacs_config_options " | sed -e 's/--no-create //' -e 's/--no-recursion //' -e 's/ *$//' -e "s/\"/'/g" -e 's/\\\\/\\\\\\\\/g'`
 
 cat >>confdefs.h <<_ACEOF
 #define EMACS_CONFIG_OPTIONS "${emacs_config_options}"
@@ -22221,9 +22365,11 @@ _ACEOF
 
 
 
+  :
 
 
 
+  :
 
 
 
@@ -29020,10 +29166,13 @@ if test "$HAVE_NS" = "yes"; then
   if test "$NS_IMPL_GNUSTEP" = yes; then
     ac_config_files="$ac_config_files nextstep/GNUstep/Emacs.base/Resources/Info-gnustep.plist:nextstep/templates/Info-gnustep.plist.in nextstep/GNUstep/Emacs.base/Resources/Emacs.desktop:nextstep/templates/Emacs.desktop.in"
 
+    ns_check_file=Resources/Info-gnustep.plist
   else
     ac_config_files="$ac_config_files nextstep/Cocoa/Emacs.base/Contents/Info.plist:nextstep/templates/Info.plist.in nextstep/Cocoa/Emacs.base/Contents/Resources/English.lproj/InfoPlist.strings:nextstep/templates/InfoPlist.strings.in"
 
+    ns_check_file=Contents/Info.plist
   fi
+
 fi
 
 SUBDIR_MAKEFILES="lib/Makefile lib-src/Makefile oldXMenu/Makefile doc/emacs/Makefile doc/misc/Makefile doc/lispintro/Makefile doc/lispref/Makefile src/Makefile lwlib/Makefile lisp/Makefile leim/Makefile nextstep/Makefile nt/Makefile"

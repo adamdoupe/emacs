@@ -35,6 +35,8 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "keyboard.h"
 #include "charset.h"
 #include "coding.h"
+#include "font.h"
+
 #include <gdk/gdkkeysyms.h>
 #include "xsettings.h"
 
@@ -870,29 +872,23 @@ xg_clear_under_internal_border (struct frame *f)
   if (FRAME_INTERNAL_BORDER_WIDTH (f) > 0)
     {
       GtkWidget *wfixed = f->output_data.x->edit_widget;
+
       gtk_widget_queue_draw (wfixed);
       gdk_window_process_all_updates ();
-      x_clear_area (FRAME_X_DISPLAY (f),
-                    FRAME_X_WINDOW (f),
-                    0, 0,
-                    FRAME_PIXEL_WIDTH (f),
-                    FRAME_INTERNAL_BORDER_WIDTH (f), 0);
-      x_clear_area (FRAME_X_DISPLAY (f),
-                    FRAME_X_WINDOW (f),
-                    0, 0,
-                    FRAME_INTERNAL_BORDER_WIDTH (f),
-                    FRAME_PIXEL_HEIGHT (f), 0);
-      x_clear_area (FRAME_X_DISPLAY (f),
-                    FRAME_X_WINDOW (f),
-                    0, FRAME_PIXEL_HEIGHT (f) - FRAME_INTERNAL_BORDER_WIDTH (f),
-                    FRAME_PIXEL_WIDTH (f),
-                    FRAME_INTERNAL_BORDER_WIDTH (f), 0);
-      x_clear_area (FRAME_X_DISPLAY (f),
-                    FRAME_X_WINDOW (f),
-                    FRAME_PIXEL_WIDTH (f) - FRAME_INTERNAL_BORDER_WIDTH (f),
-                    0,
-                    FRAME_INTERNAL_BORDER_WIDTH (f),
-                    FRAME_PIXEL_HEIGHT (f), 0);
+
+      x_clear_area (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f), 0, 0,
+		    FRAME_PIXEL_WIDTH (f), FRAME_INTERNAL_BORDER_WIDTH (f));
+
+      x_clear_area (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f), 0, 0,
+		    FRAME_INTERNAL_BORDER_WIDTH (f), FRAME_PIXEL_HEIGHT (f));
+
+      x_clear_area (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f), 0,
+		    FRAME_PIXEL_HEIGHT (f) - FRAME_INTERNAL_BORDER_WIDTH (f),
+		    FRAME_PIXEL_WIDTH (f), FRAME_INTERNAL_BORDER_WIDTH (f));
+
+      x_clear_area (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f),
+		    FRAME_PIXEL_WIDTH (f) - FRAME_INTERNAL_BORDER_WIDTH (f),
+		    0, FRAME_INTERNAL_BORDER_WIDTH (f), FRAME_PIXEL_HEIGHT (f));
     }
 }
 
@@ -1341,12 +1337,23 @@ x_wm_set_size_hint (struct frame *f, long int flags, bool user_position)
   int base_width, base_height;
   int min_rows = 0, min_cols = 0;
   int win_gravity = f->win_gravity;
+  Lisp_Object fs_state, frame;
 
   /* Don't set size hints during initialization; that apparently leads
      to a race condition.  See the thread at
      http://lists.gnu.org/archive/html/emacs-devel/2008-10/msg00033.html  */
   if (NILP (Vafter_init_time) || !FRAME_GTK_OUTER_WIDGET (f))
     return;
+
+  XSETFRAME (frame, f);
+  fs_state = Fframe_parameter (frame, Qfullscreen);
+  if (EQ (fs_state, Qmaximized) || EQ (fs_state, Qfullboth))
+    {
+      /* Don't set hints when maximized or fullscreen.  Apparently KWin and
+         Gtk3 don't get along and the frame shrinks (!).
+      */
+      return;
+    }
 
   if (flags)
     {
@@ -1672,15 +1679,15 @@ static gboolean
 xg_maybe_add_timer (gpointer data)
 {
   struct xg_dialog_data *dd = data;
-  EMACS_TIME next_time = timer_check ();
+  struct timespec next_time = timer_check ();
 
   dd->timerid = 0;
 
-  if (EMACS_TIME_VALID_P (next_time))
+  if (timespec_valid_p (next_time))
     {
-      time_t s = EMACS_SECS (next_time);
-      int per_ms = EMACS_TIME_RESOLUTION / 1000;
-      int ms = (EMACS_NSECS (next_time) + per_ms - 1) / per_ms;
+      time_t s = next_time.tv_sec;
+      int per_ms = TIMESPEC_RESOLUTION / 1000;
+      int ms = (next_time.tv_nsec + per_ms - 1) / per_ms;
       if (s <= ((guint) -1 - ms) / 1000)
 	dd->timerid = g_timeout_add (s * 1000 + ms, xg_maybe_add_timer, dd);
     }
@@ -2039,7 +2046,6 @@ xg_get_file_name (struct frame *f,
 
 
 static char *x_last_font_name;
-extern Lisp_Object Qxft;
 
 /* Pop up a GTK font selector and return the name of the font the user
    selects, as a C string.  The returned font name follows GTK's own
@@ -3739,14 +3745,11 @@ xg_update_scrollbar_pos (struct frame *f,
       gtk_widget_queue_draw (wfixed);
       gdk_window_process_all_updates ();
       if (oldx != -1 && oldw > 0 && oldh > 0)
-        {
-          /* Clear under old scroll bar position.  This must be done after
-             the gtk_widget_queue_draw and gdk_window_process_all_updates
-             above.  */
-          x_clear_area (FRAME_X_DISPLAY (f),
-                        FRAME_X_WINDOW (f),
-                        oldx, oldy, oldw, oldh, 0);
-        }
+	/* Clear under old scroll bar position.  This must be done after
+	   the gtk_widget_queue_draw and gdk_window_process_all_updates
+	   above.  */
+	x_clear_area (FRAME_X_DISPLAY (f), FRAME_X_WINDOW (f),
+		      oldx, oldy, oldw, oldh);
 
       /* GTK does not redraw until the main loop is entered again, but
          if there are no X events pending we will not enter it.  So we sync
@@ -3780,7 +3783,7 @@ xg_set_toolkit_scroll_bar_thumb (struct scroll_bar *bar,
 
   struct frame *f = XFRAME (WINDOW_FRAME (XWINDOW (bar->window)));
 
-  if (wscroll && NILP (bar->dragging))
+  if (wscroll && bar->dragging == -1)
     {
       GtkAdjustment *adj;
       gdouble shown;
@@ -5033,10 +5036,10 @@ xg_initialize (void)
                                           (gdk_display_get_default ()));
   /* Remove F10 as a menu accelerator, it does not mix well with Emacs key
      bindings.  It doesn't seem to be any way to remove properties,
-     so we set it to VoidSymbol which in X means "no key".  */
+     so we set it to "" which in means "no key".  */
   gtk_settings_set_string_property (settings,
                                     "gtk-menu-bar-accel",
-                                    "VoidSymbol",
+                                    "",
                                     EMACS_CLASS);
 
   /* Make GTK text input widgets use Emacs style keybindings.  This is

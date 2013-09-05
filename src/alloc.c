@@ -318,7 +318,6 @@ static void *min_heap_address, *max_heap_address;
 static struct mem_node mem_z;
 #define MEM_NIL &mem_z
 
-#if GC_MARK_STACK || defined GC_MALLOC_CHECK
 static struct mem_node *mem_insert (void *, void *, enum mem_type);
 static void mem_insert_fixup (struct mem_node *);
 static void mem_rotate_left (struct mem_node *);
@@ -326,7 +325,6 @@ static void mem_rotate_right (struct mem_node *);
 static void mem_delete (struct mem_node *);
 static void mem_delete_fixup (struct mem_node *);
 static struct mem_node *mem_find (void *);
-#endif
 
 #endif /* GC_MARK_STACK || GC_MALLOC_CHECK */
 
@@ -2807,7 +2805,7 @@ vector_nbytes (struct Lisp_Vector *v)
 static void
 sweep_vectors (void)
 {
-  struct vector_block *block = vector_blocks, **bprev = &vector_blocks;
+  struct vector_block *block, **bprev = &vector_blocks;
   struct large_vector *lv, **lvprev = &large_vectors;
   struct Lisp_Vector *vector, *next;
 
@@ -3481,6 +3479,7 @@ DEFUN ("make-marker", Fmake_marker, Smake_marker, 0, 0, 0,
   p->charpos = 0;
   p->next = NULL;
   p->insertion_type = 0;
+  p->need_adjustment = 0;
   return val;
 }
 
@@ -3505,6 +3504,7 @@ build_marker (struct buffer *buf, ptrdiff_t charpos, ptrdiff_t bytepos)
   m->charpos = charpos;
   m->bytepos = bytepos;
   m->insertion_type = 0;
+  m->need_adjustment = 0;
   m->next = BUF_MARKERS (buf);
   BUF_MARKERS (buf) = m;
   return obj;
@@ -3527,9 +3527,9 @@ free_marker (Lisp_Object marker)
    Any number of arguments, even zero arguments, are allowed.  */
 
 Lisp_Object
-make_event_array (register int nargs, Lisp_Object *args)
+make_event_array (ptrdiff_t nargs, Lisp_Object *args)
 {
-  int i;
+  ptrdiff_t i;
 
   for (i = 0; i < nargs; i++)
     /* The things that fit in a string
@@ -4238,6 +4238,10 @@ live_buffer_p (struct mem_node *m, void *p)
 
 #if GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES
 
+/* Currently not used, but may be called from gdb.  */
+
+void dump_zombies (void) EXTERNALLY_VISIBLE;
+
 /* Array of objects that are kept alive because the C stack contains
    a pattern that looks like a reference to them .  */
 
@@ -4620,7 +4624,7 @@ check_gcpros (void)
 
 #elif GC_MARK_STACK == GC_USE_GCPROS_CHECK_ZOMBIES
 
-static void
+void
 dump_zombies (void)
 {
   int i;
@@ -4756,6 +4760,10 @@ mark_stack (void)
   check_gcpros ();
 #endif
 }
+
+#else /* GC_MARK_STACK == 0 */
+
+#define mark_maybe_object(obj) emacs_abort ()
 
 #endif /* GC_MARK_STACK != 0 */
 
@@ -5227,7 +5235,7 @@ See Info node `(elisp)Garbage Collection'.  */)
   ptrdiff_t i;
   bool message_p;
   ptrdiff_t count = SPECPDL_INDEX ();
-  EMACS_TIME start;
+  struct timespec start;
   Lisp_Object retval = Qnil;
   size_t tot_before = 0;
 
@@ -5252,7 +5260,7 @@ See Info node `(elisp)Garbage Collection'.  */)
   if (profiler_memory_running)
     tot_before = total_bytes_of_live_objects ();
 
-  start = current_emacs_time ();
+  start = current_timespec ();
 
   /* In case user calls debug_print during GC,
      don't let that cause a recursive GC.  */
@@ -5515,9 +5523,9 @@ See Info node `(elisp)Garbage Collection'.  */)
   /* Accumulate statistics.  */
   if (FLOATP (Vgc_elapsed))
     {
-      EMACS_TIME since_start = sub_emacs_time (current_emacs_time (), start);
+      struct timespec since_start = timespec_sub (current_timespec (), start);
       Vgc_elapsed = make_float (XFLOAT_DATA (Vgc_elapsed)
-				+ EMACS_TIME_TO_DOUBLE (since_start));
+				+ timespectod (since_start));
     }
 
   gcs_done++;

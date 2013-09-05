@@ -874,7 +874,7 @@ PRESERVE-UID-GID and PRESERVE-EXTENDED-ATTRIBUTES are completely ignored."
     (when p
       (if (yes-or-no-p "A command is running.  Kill it? ")
 	  (ignore-errors (kill-process p))
-	(tramp-compat-user-error "Shell command in progress")))
+	(tramp-user-error p "Shell command in progress")))
 
     (if current-buffer-p
 	(progn
@@ -1092,6 +1092,8 @@ FMT and ARGS are passed to `error'."
   "Maybe open a connection VEC.
 Does not do anything if a connection is already open, but re-opens the
 connection if a previous connection has died for some reason."
+  (tramp-check-proper-host vec)
+
   (let* ((buf (tramp-get-connection-buffer vec))
 	 (p (get-buffer-process buf))
 	 (host (tramp-file-name-host vec))
