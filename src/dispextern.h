@@ -1195,12 +1195,6 @@ struct glyph_row *matrix_row (struct glyph_matrix *, int);
       ((ROW)->phys_height - (ROW)->phys_ascent	\
        > (ROW)->height - (ROW)->ascent)
 
-/* True means that fonts have been loaded since the last glyph
-   matrix adjustments.  The function redisplay_internal adjusts glyph
-   matrices when this flag is true.  */
-
-extern bool fonts_changed_p;
-
 /* A glyph for a space.  */
 
 extern struct glyph space_glyph;
@@ -2802,11 +2796,6 @@ struct redisplay_interface
   /* Flush the display of frame F.  For X, this is XFlush.  */
   void (*flush_display) (struct frame *f);
 
-  /* Flush the display of frame F if non-NULL.  This is called
-     during redisplay, and should be NULL on systems which flush
-     automatically before reading input.  */
-  void (*flush_display_optional) (struct frame *f);
-
   /* Clear the mouse highlight in window W, if there is any.  */
   void (*clear_window_mouse_face) (struct window *w);
 
@@ -3214,6 +3203,7 @@ extern ptrdiff_t compute_display_string_pos (struct text_pos *,
 extern ptrdiff_t compute_display_string_end (ptrdiff_t,
 					     struct bidi_string_data *);
 extern void produce_stretch_glyph (struct it *);
+extern int merge_glyphless_glyph_face (struct it *);
 
 #ifdef HAVE_WINDOW_SYSTEM
 
@@ -3454,7 +3444,7 @@ extern void cancel_line (int, struct frame *);
 extern void init_desired_glyphs (struct frame *);
 extern bool update_frame (struct frame *, bool, bool);
 extern void bitch_at_user (void);
-void adjust_glyphs (struct frame *);
+extern void adjust_frame_glyphs (struct frame *);
 void free_glyphs (struct frame *);
 void free_window_matrices (struct window *);
 void check_glyph_memory (void);

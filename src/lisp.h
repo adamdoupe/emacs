@@ -3160,6 +3160,16 @@ EXFUN (Fbyteorder, 0) ATTRIBUTE_CONST;
 /* Defined in data.c.  */
 extern Lisp_Object indirect_function (Lisp_Object);
 extern Lisp_Object find_symbol_value (Lisp_Object);
+enum Arith_Comparison {
+  ARITH_EQUAL,
+  ARITH_NOTEQUAL,
+  ARITH_LESS,
+  ARITH_GRTR,
+  ARITH_LESS_OR_EQUAL,
+  ARITH_GRTR_OR_EQUAL
+};
+extern Lisp_Object arithcompare (Lisp_Object num1, Lisp_Object num2,
+                                 enum Arith_Comparison comparison);
 
 /* Convert the integer I to an Emacs representation, either the integer
    itself, or a cons of two or three integers, or if all else fails a float.
@@ -3359,9 +3369,6 @@ extern Lisp_Object Qglyphless_char;
 extern Lisp_Object QCdata, QCfile;
 extern Lisp_Object QCmap;
 extern Lisp_Object Qrisky_local_variable;
-extern struct frame *last_glyphless_glyph_frame;
-extern int last_glyphless_glyph_face_id;
-extern int last_glyphless_glyph_merged_face_id;
 extern int noninteractive_need_newline;
 extern Lisp_Object echo_area_buffer[2];
 extern void add_to_log (const char *, Lisp_Object, Lisp_Object);
